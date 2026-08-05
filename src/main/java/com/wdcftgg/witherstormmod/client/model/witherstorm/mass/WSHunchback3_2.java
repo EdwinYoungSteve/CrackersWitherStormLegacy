@@ -1,0 +1,107 @@
+package com.wdcftgg.witherstormmod.client.model.witherstorm.mass;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.CubeDeformation;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.CubeListBuilder;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.PartDefinition;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.PartPose;
+
+
+
+public class WSHunchback3_2 {
+    public static PartDefinition createBodyModel(PartDefinition root, float texScale) {
+        CubeListBuilder builder0 = CubeListBuilder.m_171558_();
+        builder0.m_171514_(0, 148);
+        builder0.m_171488_(-3.0f, -9.0f, 1.0f, 6.0f, 6.0f, 6.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(136, 128);
+        builder0.m_171488_(-15.0f, -14.0f, -2.0f, 6.0f, 6.0f, 6.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(0, 152);
+        builder0.m_171488_(7.0f, -21.0f, 8.0f, 4.0f, 4.0f, 4.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(128, 124);
+        builder0.m_171488_(0.0f, -21.0f, 8.0f, 8.0f, 8.0f, 8.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(0, 136);
+        builder0.m_171488_(-4.0f, -13.0f, -2.0f, 12.0f, 12.0f, 12.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(0, 136);
+        builder0.m_171488_(-7.1632f, -8.8161f, -0.1051f, 12.0f, 12.0f, 12.0f, CubeDeformation.f_171458_);
+        builder0.m_171514_(0, 148);
+        builder0.m_171488_(-4.75f, -21.25f, -1.5f, 16.0f, 6.0f, 6.0f, CubeDeformation.f_171458_);
+        PartDefinition back = root.m_171599_("mass", builder0, PartPose.m_171419_((float)0.0f, (float)24.0f, (float)0.0f));
+        CubeListBuilder builder1 = CubeListBuilder.m_171558_();
+        builder1.m_171514_(0, 147);
+        builder1.m_171488_(-2.5f, -0.75f, -3.25f, 5.0f, 7.5f, 5.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r1", builder1, PartPose.m_171423_((float)-1.0f, (float)6.5f, (float)6.5f, (float)0.2618f, (float)0.0f, (float)0.0436f));
+        CubeListBuilder builder2 = CubeListBuilder.m_171558_();
+        builder2.m_171514_(0, 150);
+        builder2.m_171488_(-0.5f, -2.5f, -0.5f, 1.0f, 5.0f, 1.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r2", builder2, PartPose.m_171423_((float)-1.6469f, (float)16.5278f, (float)7.4202f, (float)0.1745f, (float)-0.0436f, (float)-0.0436f));
+        CubeListBuilder builder3 = CubeListBuilder.m_171558_();
+        builder3.m_171514_(0, 150);
+        builder3.m_171488_(-0.5f, -1.0f, -0.75f, 1.0f, 5.0f, 1.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r3", builder3, PartPose.m_171423_((float)-0.6939f, (float)16.7283f, (float)8.741f, (float)0.1745f, (float)0.0436f, (float)-0.0436f));
+        CubeListBuilder builder4 = CubeListBuilder.m_171558_();
+        builder4.m_171514_(-1, 150);
+        builder4.m_171488_(-1.75f, -1.625f, -0.9375f, 3.0f, 5.0f, 3.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r4", builder4, PartPose.m_171423_((float)-1.0f, (float)12.75f, (float)6.5f, (float)0.2182f, (float)0.0f, (float)0.0436f));
+        CubeListBuilder builder5 = CubeListBuilder.m_171558_();
+        builder5.m_171514_(0, 145);
+        builder5.m_171488_(-3.75f, -1.75f, -4.25f, 7.5f, 7.5f, 7.5f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r5", builder5, PartPose.m_171423_((float)-0.5f, (float)3.4829f, (float)6.2389f, (float)0.1309f, (float)0.0f, (float)0.0f));
+        CubeListBuilder builder6 = CubeListBuilder.m_171558_();
+        builder6.m_171514_(0, 140);
+        builder6.m_171488_(-5.25f, -6.5f, -5.0f, 10.0f, 10.0f, 10.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r6", builder6, PartPose.m_171423_((float)-2.2795f, (float)-14.2006f, (float)12.2003f, (float)0.9163f, (float)-0.1309f, (float)0.0873f));
+        CubeListBuilder builder7 = CubeListBuilder.m_171558_();
+        builder7.m_171514_(0, 136);
+        builder7.m_171488_(-6.0f, -6.0f, -6.0f, 12.0f, 12.0f, 12.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r7", builder7, PartPose.m_171423_((float)0.0f, (float)-12.0f, (float)-3.0f, (float)0.1309f, (float)0.0f, (float)0.0436f));
+        CubeListBuilder builder8 = CubeListBuilder.m_171558_();
+        builder8.m_171514_(0, 144);
+        builder8.m_171488_(-4.0f, -4.0f, -4.0f, 8.0f, 8.0f, 8.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r8", builder8, PartPose.m_171423_((float)5.2032f, (float)-11.5751f, (float)-0.4504f, (float)-0.1309f, (float)-0.1309f, (float)0.3927f));
+        CubeListBuilder builder9 = CubeListBuilder.m_171558_();
+        builder9.m_171514_(128, 133);
+        builder9.m_171488_(-4.0f, -4.0f, -4.0f, 8.0f, 8.0f, 8.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r9", builder9, PartPose.m_171423_((float)1.0f, (float)-7.0f, (float)-2.0f, (float)-0.0873f, (float)-0.1745f, (float)0.0873f));
+        CubeListBuilder builder10 = CubeListBuilder.m_171558_();
+        builder10.m_171514_(0, 140);
+        builder10.m_171488_(-4.5f, -6.0f, -6.0f, 10.0f, 10.0f, 10.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r10", builder10, PartPose.m_171423_((float)-8.9905f, (float)-16.1304f, (float)-3.0436f, (float)1.8762f, (float)-2.618f, (float)0.1309f));
+        CubeListBuilder builder11 = CubeListBuilder.m_171558_();
+        builder11.m_171514_(0, 132);
+        builder11.m_171488_(-5.0f, 1.0f, -12.0f, 14.0f, 14.0f, 14.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r11", builder11, PartPose.m_171423_((float)-13.0f, (float)-34.0f, (float)6.0f, (float)0.48f, (float)-0.7418f, (float)0.1309f));
+        CubeListBuilder builder12 = CubeListBuilder.m_171558_();
+        builder12.m_171514_(0, 144);
+        builder12.m_171488_(-1.0f, -0.75f, -4.75f, 8.0f, 8.0f, 8.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r12", builder12, PartPose.m_171423_((float)-9.25f, (float)-7.5f, (float)6.25f, (float)0.0873f, (float)0.0436f, (float)-0.4363f));
+        CubeListBuilder builder13 = CubeListBuilder.m_171558_();
+        builder13.m_171514_(0, 128);
+        builder13.m_171488_(-8.0f, -11.0f, -8.0f, 16.0f, 16.0f, 16.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r13", builder13, PartPose.m_171423_((float)-6.0f, (float)-22.0f, (float)12.0f, (float)-0.5236f, (float)-0.1745f, (float)0.0436f));
+        CubeListBuilder builder14 = CubeListBuilder.m_171558_();
+        builder14.m_171514_(0, 132);
+        builder14.m_171488_(-7.0f, -7.0f, -7.0f, 14.0f, 14.0f, 14.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r14", builder14, PartPose.m_171423_((float)3.0f, (float)-24.6809f, (float)16.2128f, (float)-0.48f, (float)0.4363f, (float)0.2182f));
+        CubeListBuilder builder15 = CubeListBuilder.m_171558_();
+        builder15.m_171514_(136, 125);
+        builder15.m_171488_(-3.0f, -3.0f, -3.0f, 6.0f, 6.0f, 6.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r15", builder15, PartPose.m_171423_((float)5.0f, (float)-7.0f, (float)2.0f, (float)-0.0873f, (float)0.0f, (float)0.1309f));
+        CubeListBuilder builder16 = CubeListBuilder.m_171558_();
+        builder16.m_171514_(0, 136);
+        builder16.m_171488_(-6.0f, -9.0f, -2.0f, 12.0f, 12.0f, 12.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r16", builder16, PartPose.m_171423_((float)-0.2442f, (float)-24.9694f, (float)5.7408f, (float)-0.48f, (float)0.1309f, (float)0.0f));
+        CubeListBuilder builder17 = CubeListBuilder.m_171558_();
+        builder17.m_171514_(0, 128);
+        builder17.m_171488_(-8.0f, -8.0f, -7.0f, 16.0f, 16.0f, 16.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r17", builder17, PartPose.m_171423_((float)-2.0f, (float)-13.0f, (float)4.0f, (float)0.0f, (float)0.0f, (float)0.2618f));
+        CubeListBuilder builder18 = CubeListBuilder.m_171558_();
+        builder18.m_171514_(0, 140);
+        builder18.m_171488_(-5.0f, -5.0f, -5.0f, 10.0f, 10.0f, 10.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r18", builder18, PartPose.m_171423_((float)8.0f, (float)-16.0f, (float)6.0f, (float)-0.48f, (float)0.1745f, (float)0.2182f));
+        CubeListBuilder builder19 = CubeListBuilder.m_171558_();
+        builder19.m_171514_(0, 136);
+        builder19.m_171488_(-6.0f, -3.0f, -9.0f, 12.0f, 12.0f, 12.0f, CubeDeformation.f_171458_);
+        back.m_171599_("back_r19", builder19, PartPose.m_171423_((float)9.0f, (float)-28.0f, (float)7.0f, (float)0.2182f, (float)1.0472f, (float)-0.5236f));
+        return back;
+    }
+}
+
+

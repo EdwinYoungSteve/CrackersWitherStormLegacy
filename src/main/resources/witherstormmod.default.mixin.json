@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "com.wdcftgg.witherstormmod.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "target": "@env(DEFAULT)",
+  "client": [
+    "client.MinecraftAccessor"
+  ],
+  "mixins": [
+    "EntityLivingBaseMixin"
+  ],
+  "server": [],
+  "setSourceFile": true,
+  "minVersion": "0.8.7",
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
