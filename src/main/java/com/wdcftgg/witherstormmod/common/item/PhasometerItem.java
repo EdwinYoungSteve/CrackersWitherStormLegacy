@@ -1,7 +1,7 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.advancement.LegacyCriteriaTriggers;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
@@ -74,7 +74,7 @@ public class PhasometerItem extends Item {
         if (user.world.isRemote) return;
 
         NBTTagCompound tag = getOrCreateTag(stack);
-        EntityWitherStormLegacy storm = findLookedAtStorm(user.world, user);
+        WitherStormEntity storm = findLookedAtStorm(user.world, user);
         if (storm == null) {
             clearDataTags(tag);
             return;
@@ -83,7 +83,7 @@ public class PhasometerItem extends Item {
         RayTraceResult obstruction = rayTraceToward(user, storm, OBSTRUCTION_TRACE_DISTANCE);
         if (obstruction == null || obstruction.typeOfHit == RayTraceResult.Type.MISS) {
             if (user instanceof EntityPlayerMP) {
-                LegacyCriteriaTriggers.OBSERVE_WITHER_STORM.trigger(
+                ModCriteriaTriggers.OBSERVE_WITHER_STORM.trigger(
                         (EntityPlayerMP) user, stack, storm);
             }
             applyStormData(tag, storm, isUpgraded(stack));
@@ -145,7 +145,7 @@ public class PhasometerItem extends Item {
         }
     }
 
-    private static void applyStormData(NBTTagCompound tag, EntityWitherStormLegacy storm,
+    private static void applyStormData(NBTTagCompound tag, WitherStormEntity storm,
                                        boolean upgraded) {
         for (DataEntry entry : DataEntry.values()) {
             if (!entry.requiresUpgraded || upgraded) entry.apply(tag, storm);
@@ -154,7 +154,7 @@ public class PhasometerItem extends Item {
     }
 
     @Nullable
-    private static EntityWitherStormLegacy findLookedAtStorm(World world, EntityLivingBase user) {
+    private static WitherStormEntity findLookedAtStorm(World world, EntityLivingBase user) {
         Vec3d start = user.getPositionEyes(1.0F);
         Vec3d end = start.add(user.getLookVec().scale(ENTITY_TRACE_DISTANCE));
         AxisAlignedBB searchBounds = new AxisAlignedBB(start, end).grow(1.0D);
@@ -174,13 +174,13 @@ public class PhasometerItem extends Item {
                 nearestDistance = distance;
             }
         }
-        return nearest instanceof EntityWitherStormLegacy
-                ? (EntityWitherStormLegacy) nearest : null;
+        return nearest instanceof WitherStormEntity
+                ? (WitherStormEntity) nearest : null;
     }
 
     @Nullable
     private static RayTraceResult rayTraceToward(EntityLivingBase user,
-                                                  EntityWitherStormLegacy storm,
+                                                  WitherStormEntity storm,
                                                   double maximumDistance) {
         Vec3d start = user.getPositionEyes(1.0F);
         Vec3d difference = storm.getPositionEyes(1.0F).subtract(start);
@@ -248,7 +248,7 @@ public class PhasometerItem extends Item {
             this.informational = informational;
         }
 
-        private void apply(NBTTagCompound tag, EntityWitherStormLegacy storm) {
+        private void apply(NBTTagCompound tag, WitherStormEntity storm) {
             switch (this) {
                 case PHASE:
                     tag.setInteger(tagName, storm.getPhase());

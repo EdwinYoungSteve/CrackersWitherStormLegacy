@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.entity.EntitySickenedMob;
+import com.wdcftgg.witherstormmod.common.entity.SickenedMobEntity;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
-import com.wdcftgg.witherstormmod.common.taint.LegacyWitherSicknessCure;
+import com.wdcftgg.witherstormmod.common.taint.WitherSicknessCure;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.MobEffects;
@@ -35,7 +35,7 @@ public class GoldenAppleStewItem extends ItemSoup {
         }
         player.addPotionEffect(new PotionEffect(MobEffects.REGENERATION, REGENERATION_DURATION, 0));
         player.addPotionEffect(new PotionEffect(MobEffects.ABSORPTION, ABSORPTION_DURATION, 0));
-        if (LegacyWitherSicknessCure.beginCure(player)) {
+        if (WitherSicknessCure.beginCure(player)) {
             playCureSound(player);
         }
     }
@@ -52,8 +52,8 @@ public class GoldenAppleStewItem extends ItemSoup {
 
     @Override
     public boolean itemInteractionForEntity(ItemStack stack, EntityPlayer player, EntityLivingBase target, EnumHand hand) {
-        if (target instanceof EntitySickenedMob) {
-            EntitySickenedMob sickened = (EntitySickenedMob) target;
+        if (target instanceof SickenedMobEntity) {
+            SickenedMobEntity sickened = (SickenedMobEntity) target;
             if (sickened.isConverting() || sickened.getOriginalType() == null) {
                 return false;
             }
@@ -64,11 +64,11 @@ public class GoldenAppleStewItem extends ItemSoup {
             return true;
         }
 
-        if (!LegacyWitherSicknessCure.isInfected(target)
-                || LegacyWitherSicknessCure.isBeingCured(target)) {
+        if (!WitherSicknessCure.isInfected(target)
+                || WitherSicknessCure.isBeingCured(target)) {
             return false;
         }
-        if (!target.world.isRemote && LegacyWitherSicknessCure.beginCure(target)) {
+        if (!target.world.isRemote && WitherSicknessCure.beginCure(target)) {
             playCureSound(target);
             if (!player.capabilities.isCreativeMode) stack.shrink(1);
         }

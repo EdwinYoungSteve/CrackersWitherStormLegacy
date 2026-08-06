@@ -1,20 +1,20 @@
 package com.wdcftgg.witherstormmod.common.init;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.item.LegacyAxeItem;
+import com.wdcftgg.witherstormmod.common.item.CommandBlockAxeItem;
 import com.wdcftgg.witherstormmod.common.item.AmuletItem;
 import com.wdcftgg.witherstormmod.common.item.FormidiBladeItem;
 import com.wdcftgg.witherstormmod.common.item.EyeOfTheStormItem;
 import com.wdcftgg.witherstormmod.common.item.GoldenAppleStewItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyFoodItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyFoiledItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyHoeItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyPickaxeItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyShovelItem;
-import com.wdcftgg.witherstormmod.common.item.LegacySpawnEggItem;
-import com.wdcftgg.witherstormmod.common.item.LegacySwordItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyToolMaterials;
+import com.wdcftgg.witherstormmod.common.item.EffectFoodItem;
+import com.wdcftgg.witherstormmod.common.item.FoiledItem;
+import com.wdcftgg.witherstormmod.common.item.CommandBlockHoeItem;
+import com.wdcftgg.witherstormmod.common.item.SimpleItem;
+import com.wdcftgg.witherstormmod.common.item.CommandBlockPickaxeItem;
+import com.wdcftgg.witherstormmod.common.item.CommandBlockShovelItem;
+import com.wdcftgg.witherstormmod.common.item.SpawnEggItem;
+import com.wdcftgg.witherstormmod.common.item.CommandBlockSwordItem;
+import com.wdcftgg.witherstormmod.common.item.ModToolMaterials;
 import com.wdcftgg.witherstormmod.common.item.WitheredNetherStarItem;
 import com.wdcftgg.witherstormmod.common.item.PhasometerItem;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
@@ -36,7 +36,7 @@ public final class ModItems {
 
     private static final Map<String, Item> ITEMS = new LinkedHashMap<String, Item>();
     private static final Map<String, int[]> SPAWN_EGG_COLORS = new LinkedHashMap<String, int[]>();
-    private static final String[] ITEM_NAMES = LegacyRegistryNames.itemNames();
+    private static final String[] ITEM_NAMES = ModRegistryNames.itemNames();
 
     static {
         SPAWN_EGG_COLORS.put("sickened_creeper", new int[] {9851315, 3278099});
@@ -110,10 +110,10 @@ public final class ModItems {
             return new PhasometerItem(name);
         }
         if ("withered_bone".equals(name)) {
-            return new LegacyItem(name, EnumRarity.UNCOMMON);
+            return new SimpleItem(name, EnumRarity.UNCOMMON);
         }
         if ("command_block_book".equals(name)) {
-            return new LegacyFoiledItem(name, EnumRarity.RARE);
+            return new FoiledItem(name, EnumRarity.RARE);
         }
         if ("formidi_blade".equals(name)) {
             return new FormidiBladeItem(name);
@@ -127,56 +127,56 @@ public final class ModItems {
             if (colors == null) {
                 throw new IllegalStateException("Missing upstream spawn egg colors for " + entityName);
             }
-            return new LegacySpawnEggItem(name, entityName, colors[0], colors[1]);
+            return new SpawnEggItem(name, entityName, colors[0], colors[1]);
         }
         if ("golden_apple_stew".equals(name)) {
             return new GoldenAppleStewItem(name);
         }
         if ("withered_flesh".equals(name)) {
-            return new LegacyFoodItem(name, 4, 0.1F, true, EnumRarity.UNCOMMON,
-                    LegacyFoodItem.effect(MobEffects.HUNGER, 800, 0, 0.8F),
-                    LegacyFoodItem.effect(MobEffects.WITHER, 400, 0, 1.0F));
+            return new EffectFoodItem(name, 4, 0.1F, true, EnumRarity.UNCOMMON,
+                    EffectFoodItem.effect(MobEffects.HUNGER, 800, 0, 0.8F),
+                    EffectFoodItem.effect(MobEffects.WITHER, 400, 0, 1.0F));
         }
         if ("withered_spider_eye".equals(name)) {
-            return new LegacyFoodItem(name, 2, 0.8F, false, EnumRarity.UNCOMMON,
-                    LegacyFoodItem.effect(MobEffects.POISON, 200, 0, 1.0F),
-                    LegacyFoodItem.effect(MobEffects.WITHER, 400, 0, 1.0F));
+            return new EffectFoodItem(name, 2, 0.8F, false, EnumRarity.UNCOMMON,
+                    EffectFoodItem.effect(MobEffects.POISON, 200, 0, 1.0F),
+                    EffectFoodItem.effect(MobEffects.WITHER, 400, 0, 1.0F));
         }
         if ("withered_nether_star".equals(name)) {
             return new WitheredNetherStarItem(name);
         }
         if (name.endsWith("_sword") || "formidi_blade".equals(name)) {
-            return new LegacySwordItem(name, materialFor(name), swordDamage(name), swordSpeed(name));
+            return new CommandBlockSwordItem(name, materialFor(name), swordDamage(name), swordSpeed(name));
         }
         if (name.endsWith("_pickaxe")) {
-            return new LegacyPickaxeItem(name, materialFor(name), pickaxeDamage(name), pickaxeSpeed(name));
+            return new CommandBlockPickaxeItem(name, materialFor(name), pickaxeDamage(name), pickaxeSpeed(name));
         }
         if (name.endsWith("_axe")) {
-            return new LegacyAxeItem(name, materialFor(name), axeDamage(name), axeSpeed(name));
+            return new CommandBlockAxeItem(name, materialFor(name), axeDamage(name), axeSpeed(name));
         }
         if (name.endsWith("_shovel")) {
-            return new LegacyShovelItem(name, materialFor(name), shovelDamage(name), shovelSpeed(name));
+            return new CommandBlockShovelItem(name, materialFor(name), shovelDamage(name), shovelSpeed(name));
         }
         if (name.endsWith("_hoe")) {
-            return new LegacyHoeItem(name, materialFor(name), hoeDamage(name), hoeSpeed(name));
+            return new CommandBlockHoeItem(name, materialFor(name), hoeDamage(name), hoeSpeed(name));
         }
-        return new LegacyItem(name);
+        return new SimpleItem(name);
     }
 
     private static Item.ToolMaterial materialFor(String name) {
         if (name.startsWith("wooden_")) {
-            return LegacyToolMaterials.WOOD_COMMAND_BLOCK;
+            return ModToolMaterials.WOOD_COMMAND_BLOCK;
         }
         if (name.startsWith("stone_")) {
-            return LegacyToolMaterials.STONE_COMMAND_BLOCK;
+            return ModToolMaterials.STONE_COMMAND_BLOCK;
         }
         if (name.startsWith("iron_")) {
-            return LegacyToolMaterials.IRON_COMMAND_BLOCK;
+            return ModToolMaterials.IRON_COMMAND_BLOCK;
         }
         if (name.startsWith("gold_")) {
-            return LegacyToolMaterials.GOLD_COMMAND_BLOCK;
+            return ModToolMaterials.GOLD_COMMAND_BLOCK;
         }
-        return LegacyToolMaterials.COMMAND_BLOCK;
+        return ModToolMaterials.COMMAND_BLOCK;
     }
 
     private static float swordDamage(String name) {

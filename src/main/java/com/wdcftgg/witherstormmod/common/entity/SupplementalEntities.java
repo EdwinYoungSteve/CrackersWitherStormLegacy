@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.common.entity;
 
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
@@ -37,7 +38,7 @@ import net.minecraft.potion.PotionEffect;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.world.BowelsBossfightController;
-import com.wdcftgg.witherstormmod.common.world.LegacyChunkLoadingManager;
+import com.wdcftgg.witherstormmod.common.world.ChunkLoadingManager;
 
 import java.util.List;
 import java.util.UUID;
@@ -47,14 +48,16 @@ import java.util.ArrayList;
 import io.netty.buffer.ByteBuf;
 import net.minecraftforge.fml.common.registry.IEntityAdditionalSpawnData;
 
+import javax.annotation.Nullable;
+
 public final class SupplementalEntities {
 
     private SupplementalEntities() {
     }
 
-    public static class FlamingWitherSkull extends EntityWitherSkull {
-        public FlamingWitherSkull(World world) { super(world); setSize(0.8F, 0.8F); }
-        public FlamingWitherSkull(World world, EntityLivingBase shooter, double accelerationX, double accelerationY, double accelerationZ) {
+    public static class FlamingWitherSkullEntity extends EntityWitherSkull {
+        public FlamingWitherSkullEntity(World world) { super(world); setSize(0.8F, 0.8F); }
+        public FlamingWitherSkullEntity(World world, EntityLivingBase shooter, double accelerationX, double accelerationY, double accelerationZ) {
             super(world, shooter, accelerationX, accelerationY, accelerationZ);
             setSize(0.8F, 0.8F);
         }
@@ -72,15 +75,15 @@ public final class SupplementalEntities {
         }
     }
 
-    public static class BlueFlamingWitherSkull extends FlamingWitherSkull {
-        public BlueFlamingWitherSkull(World world) { super(world); setInvulnerable(true); }
-        public BlueFlamingWitherSkull(World world, EntityLivingBase shooter, double accelerationX, double accelerationY, double accelerationZ) {
+    public static class BlueFlamingWitherSkullEntity extends FlamingWitherSkullEntity {
+        public BlueFlamingWitherSkullEntity(World world) { super(world); setInvulnerable(true); }
+        public BlueFlamingWitherSkullEntity(World world, EntityLivingBase shooter, double accelerationX, double accelerationY, double accelerationZ) {
             super(world, shooter, accelerationX, accelerationY, accelerationZ);
             setInvulnerable(true);
         }
     }
 
-    public static class TentacleSpike extends Entity {
+    public static class TentacleSpikeEntity extends Entity {
         private UUID ownerUuid;
         private EntityLivingBase owner;
         private boolean sentSpikeEvent;
@@ -89,13 +92,13 @@ public final class SupplementalEntities {
         private boolean clientAttackStarted;
         private float damageModifier;
 
-        public TentacleSpike(World world) {
+        public TentacleSpikeEntity(World world) {
             super(world);
             setSize(0.5F, 1.4F);
             noClip = true;
         }
 
-        public TentacleSpike(World world, double x, double y, double z, float yawRadians, int warmup,
+        public TentacleSpikeEntity(World world, double x, double y, double z, float yawRadians, int warmup,
                              EntityLivingBase owner, float damageModifier) {
             this(world);
             warmupDelayTicks = warmup;
@@ -200,7 +203,7 @@ public final class SupplementalEntities {
         }
     }
 
-    public static class BlockCluster extends EntityFallingBlock implements IEntityAdditionalSpawnData {
+    public static class BlockClusterEntity extends EntityFallingBlock implements IEntityAdditionalSpawnData {
         private final Map<BlockPos, IBlockState> blocks = new LinkedHashMap<BlockPos, IBlockState>();
         private float clusterPitch;
         private float previousClusterPitch;
@@ -224,6 +227,7 @@ public final class SupplementalEntities {
         private boolean forceRender;
         private boolean createdFromBeam;
         private boolean createdFromFallingBlock;
+        private boolean shouldNotCountToConsumedMass;
         private int headCreatedFrom = -1;
         private int maximumAge = 600;
         private BlockPos fadePos;
@@ -235,17 +239,17 @@ public final class SupplementalEntities {
         private final List<NBTTagCompound> tileData = new ArrayList<NBTTagCompound>();
         private BlockPos startPos = BlockPos.ORIGIN;
 
-        public BlockCluster(World world) {
+        public BlockClusterEntity(World world) {
             super(world);
             setClusterSize(1.0F, 1.0F, 1.0F);
         }
 
-        public BlockCluster(World world, double positionX, double positionY, double positionZ, IBlockState state) {
+        public BlockClusterEntity(World world, double positionX, double positionY, double positionZ, IBlockState state) {
             super(world, positionX, positionY, positionZ, state);
             addBlock(BlockPos.ORIGIN, state);
         }
 
-        public BlockCluster(World world, double positionX, double positionY, double positionZ,
+        public BlockClusterEntity(World world, double positionX, double positionY, double positionZ,
                             Map<BlockPos, IBlockState> states) {
             this(world);
             setPosition(positionX, positionY, positionZ);
@@ -293,17 +297,24 @@ public final class SupplementalEntities {
 
         /** Converts the same strict-radius sphere used by the upstream entity. */
         public void populateWithRadius(BlockPos center, int radius, BlockStateSelector selector) {
+            populateWithRadius(center, (float) radius, selector);
+        }
+
+        /** 保留上游高斯生成出的亚方块半径，而不是在生成前将其截断为整数。 */
+        public void populateWithRadius(BlockPos center, float radius, BlockStateSelector selector) {
             blocks.clear();
             tileData.clear();
             startPos = center.toImmutable();
-            int radiusSquared = radius * radius;
-            for (int x = -radius; x <= radius; x++) {
-                for (int y = -radius; y <= radius; y++) {
-                    for (int z = -radius; z <= radius; z++) {
-                        if (!isInsidePopulateRadius(x, y, z, radiusSquared)) continue;
+            float clampedRadius = Math.max(1.0F, radius);
+            float radiusSquared = clampedRadius * clampedRadius;
+            int scanRadius = MathHelper.ceil(clampedRadius);
+            for (int x = -scanRadius; x <= scanRadius; x++) {
+                for (int y = -scanRadius; y <= scanRadius; y++) {
+                    for (int z = -scanRadius; z <= scanRadius; z++) {
+                        if (x * x + y * y + z * z >= radiusSquared) continue;
                         BlockPos worldPos = center.add(x, y, z);
                         IBlockState state = world.getBlockState(worldPos);
-                        if (!selector.test(world, worldPos, state)) continue;
+                        if (world.isAirBlock(worldPos) || !selector.test(world, worldPos, state)) continue;
                         TileEntity tile = world.getTileEntity(worldPos);
                         if (tile != null) addTileData(tile.writeToNBT(new NBTTagCompound()));
                         blocks.put(new BlockPos(x, y, z), state);
@@ -311,7 +322,8 @@ public final class SupplementalEntities {
                     }
                 }
             }
-            updateClusterSize();
+            float intendedSize = Math.max(1.0F, scanRadius * 2.0F - 1.0F);
+            setClusterSize(intendedSize, intendedSize, intendedSize);
             setPosition(center.getX() + 0.5D,
                     center.getY() - clusterSizeY / 2.0D + 0.5D,
                     center.getZ() + 0.5D);
@@ -319,6 +331,7 @@ public final class SupplementalEntities {
 
         public void setPhysics(boolean physics) {
             this.physics = physics;
+            noClip = !physics;
         }
 
         public float getClusterPitch(float partialTicks) {
@@ -415,7 +428,7 @@ public final class SupplementalEntities {
         }
 
         private void repelOverlappingClusters() {
-            for (BlockCluster other : world.getEntitiesWithinAABB(BlockCluster.class, getEntityBoundingBox().grow(0.25D))) {
+            for (BlockClusterEntity other : world.getEntitiesWithinAABB(BlockClusterEntity.class, getEntityBoundingBox().grow(0.25D))) {
                 if (other == this || getEntityId() > other.getEntityId()) continue;
                 double dx = posX - other.posX;
                 double dz = posZ - other.posZ;
@@ -517,6 +530,8 @@ public final class SupplementalEntities {
         public boolean createdFromTractorBeam() { return createdFromBeam; }
         public void setCreatedFromFallingBlock(boolean value) { createdFromFallingBlock = value; }
         public boolean createdFromFallingBlock() { return createdFromFallingBlock; }
+        public void setShouldNotCountToConsumedMass(boolean value) { shouldNotCountToConsumedMass = value; }
+        public boolean shouldNotCountToConsumedMass() { return shouldNotCountToConsumedMass; }
         public void setHeadCreatedFrom(int value) { headCreatedFrom = value; }
         public int getHeadCreatedFrom() { return headCreatedFrom; }
         public void setMaximumAge(int value) { maximumAge = Math.max(1, value); }
@@ -555,7 +570,7 @@ public final class SupplementalEntities {
             boolean test(World world, BlockPos pos, IBlockState state);
         }
 
-        public BlockCluster splitAt(EnumFacing.Axis axis) {
+        public BlockClusterEntity splitAt(EnumFacing.Axis axis) {
             if (blocks.size() < 2 || world.isRemote) return null;
             int minimum = Integer.MAX_VALUE;
             int maximum = Integer.MIN_VALUE;
@@ -578,7 +593,7 @@ public final class SupplementalEntities {
             }
             if (separated.isEmpty() || blocks.isEmpty()) return null;
             updateClusterSize();
-            BlockCluster split = new BlockCluster(world, posX, posY, posZ, separated);
+            BlockClusterEntity split = new BlockClusterEntity(world, posX, posY, posZ, separated);
             split.motionX = motionX;
             split.motionY = motionY;
             split.motionZ = motionZ;
@@ -594,6 +609,7 @@ public final class SupplementalEntities {
             split.dropItems = dropItems;
             split.createdFromBeam = createdFromBeam;
             split.createdFromFallingBlock = createdFromFallingBlock;
+            split.shouldNotCountToConsumedMass = shouldNotCountToConsumedMass;
             split.headCreatedFrom = headCreatedFrom;
             split.fadePos = fadePos;
             split.fadeStrength = fadeStrength;
@@ -662,6 +678,7 @@ public final class SupplementalEntities {
             compound.setBoolean("ForceRender", forceRender);
             compound.setBoolean("CreatedFromBeam", createdFromBeam);
             compound.setBoolean("CreatedFromFallingBlock", createdFromFallingBlock);
+            compound.setBoolean("ShouldNotCountToConsumedMass", shouldNotCountToConsumedMass);
             compound.setInteger("HeadCreatedFrom", headCreatedFrom);
             compound.setInteger("MaximumAge", maximumAge);
             if (fadePos != null) compound.setLong("FadePos", fadePos.toLong());
@@ -691,6 +708,7 @@ public final class SupplementalEntities {
             forceRender = compound.getBoolean("ForceRender");
             createdFromBeam = compound.getBoolean("CreatedFromBeam");
             createdFromFallingBlock = compound.getBoolean("CreatedFromFallingBlock");
+            shouldNotCountToConsumedMass = compound.getBoolean("ShouldNotCountToConsumedMass");
             headCreatedFrom = compound.getInteger("HeadCreatedFrom");
             maximumAge = compound.hasKey("MaximumAge")
                     ? Math.max(1, compound.getInteger("MaximumAge")) : 600;
@@ -795,7 +813,7 @@ public final class SupplementalEntities {
 
     }
 
-    public abstract static class StormPartBase extends EntitySickenedMob {
+    public abstract static class StormPartBase extends SickenedMobEntity {
         private static final DataParameter<Integer> OWNER_ID = EntityDataManager.createKey(StormPartBase.class, DataSerializers.VARINT);
         private static final DataParameter<Integer> PART_INDEX = EntityDataManager.createKey(StormPartBase.class, DataSerializers.VARINT);
         private static final DataParameter<Integer> STORM_PHASE = EntityDataManager.createKey(StormPartBase.class, DataSerializers.VARINT);
@@ -818,7 +836,7 @@ public final class SupplementalEntities {
             dataManager.register(STORM_PHASE, 0);
         }
 
-        public void bindTo(EntityWitherStormLegacy owner, int index) {
+        public void bindTo(WitherStormEntity owner, int index) {
             ownerUuid = owner.getUniqueID();
             dataManager.set(OWNER_ID, owner.getEntityId());
             dataManager.set(PART_INDEX, index);
@@ -848,14 +866,14 @@ public final class SupplementalEntities {
             if (uuid == null) dataManager.set(OWNER_ID, -1);
         }
 
-        protected EntityWitherStormLegacy getOwnerStorm() {
+        protected WitherStormEntity getOwnerStorm() {
             Entity entity = world.getEntityByID(dataManager.get(OWNER_ID));
-            if (entity instanceof EntityWitherStormLegacy) return (EntityWitherStormLegacy) entity;
+            if (entity instanceof WitherStormEntity) return (WitherStormEntity) entity;
             if (ownerUuid == null) return null;
-            List<EntityWitherStormLegacy> storms = world.getEntities(EntityWitherStormLegacy.class,
+            List<WitherStormEntity> storms = world.getEntities(WitherStormEntity.class,
                     storm -> ownerUuid.equals(storm.getUniqueID()));
             if (storms.isEmpty()) return null;
-            EntityWitherStormLegacy owner = storms.get(0);
+            WitherStormEntity owner = storms.get(0);
             dataManager.set(OWNER_ID, owner.getEntityId());
             return owner;
         }
@@ -867,7 +885,7 @@ public final class SupplementalEntities {
                 motionX = motionY = motionZ = 0.0D;
                 return;
             }
-            EntityWitherStormLegacy owner = getOwnerStorm();
+            WitherStormEntity owner = getOwnerStorm();
             if (owner == null || owner.isDead) {
                 if (!world.isRemote && ++orphanTicks > 200) setDead();
                 return;
@@ -881,16 +899,16 @@ public final class SupplementalEntities {
             dataManager.set(STORM_PHASE, owner.getPhase());
         }
 
-        protected void updateAttachedPosition(EntityWitherStormLegacy owner, double x, double y, double z) {
+        protected void updateAttachedPosition(WitherStormEntity owner, double x, double y, double z) {
             setPosition(x, y, z);
         }
 
-        protected abstract double[] getOffset(EntityWitherStormLegacy owner, int index);
+        protected abstract double[] getOffset(WitherStormEntity owner, int index);
 
         @Override
         public boolean attackEntityFrom(DamageSource source, float amount) {
             if (independentBowelsPart) return attackPartDirectly(source, amount);
-            EntityWitherStormLegacy owner = getOwnerStorm();
+            WitherStormEntity owner = getOwnerStorm();
             return owner != null && owner.attackEntityFrom(source, amount * getDamageTransfer());
         }
 
@@ -922,23 +940,23 @@ public final class SupplementalEntities {
 
         @Override
         public void setDead() {
-            if (!world.isRemote && this instanceof WitherStormSegment && !independentBowelsPart) {
-                LegacyChunkLoadingManager.INSTANCE.releaseEntity(world, "segment", getUniqueID());
+            if (!world.isRemote && this instanceof WitherStormSegmentEntity && !independentBowelsPart) {
+                ChunkLoadingManager.INSTANCE.releaseEntity(world, "segment", getUniqueID());
             }
             super.setDead();
         }
     }
 
-    public static class CommandBlockCore extends StormPartBase {
+    public static class CommandBlockEntity extends StormPartBase {
         private UUID podiumClusterUuid;
-        private BlockCluster podiumCluster;
+        private BlockClusterEntity podiumCluster;
 
-        public CommandBlockCore(World world) { super(world); setSize(2.0F, 2.0F); experienceValue = 500; }
+        public CommandBlockEntity(World world) { super(world); setSize(2.0F, 2.0F); experienceValue = 500; }
         @Override protected double getSickenedHealth() { return 500.0D; }
         @Override protected double getSickenedDamage() { return 18.0D; }
         @Override protected double getSickenedSpeed() { return 0.0D; }
         @Override public String getSickenedType() { return "command_block"; }
-        @Override protected double[] getOffset(EntityWitherStormLegacy owner, int index) {
+        @Override protected double[] getOffset(WitherStormEntity owner, int index) {
             BlockPos podium = owner.getPlayingDeadPodiumPosition();
             if (podium != null) {
                 return new double[]{podium.getX() + 0.5D - owner.posX,
@@ -953,7 +971,7 @@ public final class SupplementalEntities {
             if (isIndependentBowelsPart()) return BowelsBossfightController.attack(this, source);
             boolean damaged = attackPartDirectly(source, amount);
             if (damaged && getHealth() <= 0.0F) {
-                EntityWitherStormLegacy owner = getOwnerStorm();
+                WitherStormEntity owner = getOwnerStorm();
                 if (owner != null) owner.reviveFromPlayingDead();
             }
             return damaged;
@@ -969,7 +987,7 @@ public final class SupplementalEntities {
             findPodiumCluster();
             if (world.isRemote || podiumCluster != null || podiumClusterUuid != null) return;
             BlockPos center = getPosition();
-            BlockCluster cluster = new BlockCluster(world);
+            BlockClusterEntity cluster = new BlockClusterEntity(world);
             cluster.populate(center.add(-5, -13, -5), center.add(5, 6, 5));
             if (cluster.getBlocks().isEmpty()) return;
             cluster.setForceRender(true);
@@ -999,10 +1017,10 @@ public final class SupplementalEntities {
             podiumCluster = null;
             if (podiumClusterUuid == null || !(world instanceof WorldServer)) return;
             Entity entity = ((WorldServer) world).getEntityFromUuid(podiumClusterUuid);
-            if (entity instanceof BlockCluster && !entity.isDead) podiumCluster = (BlockCluster) entity;
+            if (entity instanceof BlockClusterEntity && !entity.isDead) podiumCluster = (BlockClusterEntity) entity;
         }
 
-        public BlockCluster getPodiumCluster() {
+        public BlockClusterEntity getPodiumCluster() {
             findPodiumCluster();
             return podiumCluster;
         }
@@ -1020,11 +1038,11 @@ public final class SupplementalEntities {
         }
     }
 
-    public static class WitherStormHead extends StormPartBase {
-        private static final DataParameter<Boolean> ACTIVE = EntityDataManager.createKey(WitherStormHead.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> ROARING = EntityDataManager.createKey(WitherStormHead.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> BITING = EntityDataManager.createKey(WitherStormHead.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> HURT = EntityDataManager.createKey(WitherStormHead.class, DataSerializers.BOOLEAN);
+    public static class WitherStormHeadEntity extends StormPartBase {
+        private static final DataParameter<Boolean> ACTIVE = EntityDataManager.createKey(WitherStormHeadEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> ROARING = EntityDataManager.createKey(WitherStormHeadEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> BITING = EntityDataManager.createKey(WitherStormHeadEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> HURT = EntityDataManager.createKey(WitherStormHeadEntity.class, DataSerializers.BOOLEAN);
 
         private Vec3d distractedPos;
         private int distractedTime;
@@ -1041,7 +1059,7 @@ public final class SupplementalEntities {
         private float previousShakeAnimation;
         private int specialDeathTime;
 
-        public WitherStormHead(World world) { super(world); setSize(5.0F, 5.0F); }
+        public WitherStormHeadEntity(World world) { super(world); setSize(5.0F, 5.0F); }
 
         @Override
         protected void entityInit() {
@@ -1058,7 +1076,7 @@ public final class SupplementalEntities {
         @Override protected double getSickenedArmor() { return 8.0D; }
         @Override protected double getSickenedKnockbackResistance() { return 1.0D; }
         @Override public String getSickenedType() { return "wither_storm_head"; }
-        @Override protected double[] getOffset(EntityWitherStormLegacy owner, int index) {
+        @Override protected double[] getOffset(WitherStormEntity owner, int index) {
             double side = index == 0 ? 0.0D : (index == 1 ? -1.0D : 1.0D) * owner.width * 0.42D;
             return new double[]{side, owner.height * 0.72D, -owner.width * 0.18D};
         }
@@ -1083,7 +1101,7 @@ public final class SupplementalEntities {
 
         @Override
         public boolean attackEntityFrom(DamageSource source, float amount) {
-            EntityWitherStormLegacy owner = getOwnerStorm();
+            WitherStormEntity owner = getOwnerStorm();
             if (owner != null && !isIndependentBowelsPart()) {
                 owner.attackHead(getPartIndex(), source.getTrueSource());
                 return true;
@@ -1105,12 +1123,12 @@ public final class SupplementalEntities {
             super.onLivingUpdate();
             setNoGravity(true);
             previousMouthAnimation = mouthAnimation;
-            mouthAnimation = LegacyWitherStormPartLogic.advanceMouth(mouthAnimation, isRoaring(), isBiting());
+            mouthAnimation = WitherStormPartLogic.advanceMouth(mouthAnimation, isRoaring(), isBiting());
             previousFadeAnimation = fadeAnimation;
-            fadeAnimation = LegacyWitherStormPartLogic.advanceFade(fadeAnimation, isPlayingDead(), rand);
+            fadeAnimation = WitherStormPartLogic.advanceFade(fadeAnimation, isPlayingDead(), rand);
             previousShakeAnimation = shakeAnimation;
             if (shaking) {
-                shakeAnimation = LegacyWitherStormPartLogic.advanceShake(shakeAnimation, true, rand);
+                shakeAnimation = WitherStormPartLogic.advanceShake(shakeAnimation, true, rand);
                 if (shakeAnimation >= 2.0F) {
                     shakeAnimation = previousShakeAnimation = 0.0F;
                     shaking = false;
@@ -1118,13 +1136,13 @@ public final class SupplementalEntities {
             }
 
             if (!isIndependentBowelsPart() || world.isRemote) return;
-            if (nextRoar <= 0) nextRoar = LegacyWitherStormPartLogic.initialRoarDelay(rand);
+            if (nextRoar <= 0) nextRoar = WitherStormPartLogic.initialRoarDelay(rand);
             if (distractedTime > 0 && --distractedTime == 0) distractedPos = null;
             if (!isDeadOrPlayingDead()) {
                 if (--nextRoar == 0) {
                     setRoar(false);
                     setRoarTime(40);
-                    nextRoar = LegacyWitherStormPartLogic.nextRoarDelay(rand);
+                    nextRoar = WitherStormPartLogic.nextRoarDelay(rand);
                 }
                 if (roarTime > 0 && --roarTime == 0) disableRoar();
                 if (biteTime > 0 && --biteTime == 0) {
@@ -1142,7 +1160,7 @@ public final class SupplementalEntities {
                     }
                     if (shootTime == 0) {
                         shootSkullAtTarget();
-                        shootTime = LegacyWitherStormPartLogic.nextShotDelay(rand);
+                        shootTime = WitherStormPartLogic.nextShotDelay(rand);
                         shaking = false;
                     }
                 }
@@ -1234,8 +1252,8 @@ public final class SupplementalEntities {
         }
 
         private boolean canAttackTarget(EntityLivingBase target) {
-            return target != this && target.isEntityAlive() && !(target instanceof EntitySickenedMob)
-                    && !(target instanceof EntityWitherStormLegacy) && !(target instanceof StormPartBase)
+            return target != this && target.isEntityAlive() && !(target instanceof SickenedMobEntity)
+                    && !(target instanceof WitherStormEntity) && !(target instanceof StormPartBase)
                     && !(target instanceof net.minecraft.entity.boss.EntityWither)
                     && !(target instanceof net.minecraft.entity.monster.EntityWitherSkeleton)
                     && !(target instanceof net.minecraft.entity.monster.EntityCreeper)
@@ -1245,7 +1263,7 @@ public final class SupplementalEntities {
 
         private boolean isATarget(EntityLivingBase target) {
             double range = getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
-            for (WitherStormHead head : world.getEntitiesWithinAABB(WitherStormHead.class,
+            for (WitherStormHeadEntity head : world.getEntitiesWithinAABB(WitherStormHeadEntity.class,
                     getEntityBoundingBox().grow(range))) {
                 if (head != this && !head.isHurt() && head.getAttackTarget() == target) return true;
             }
@@ -1274,7 +1292,7 @@ public final class SupplementalEntities {
         public float getFadeAnimation() { return fadeAnimation; }
 
         public float getHeadShakeAnimation(float partialTicks) {
-            return LegacyWitherStormPartLogic.shakeRoll(previousShakeAnimation, shakeAnimation, partialTicks);
+            return WitherStormPartLogic.shakeRoll(previousShakeAnimation, shakeAnimation, partialTicks);
         }
 
         public float getHeadShakeAnim(int head, float partialTicks) { return getHeadShakeAnimation(partialTicks); }
@@ -1351,9 +1369,9 @@ public final class SupplementalEntities {
         }
 
         private static class DoNothingGoal extends EntityAIBase {
-            private final WitherStormHead head;
+            private final WitherStormHeadEntity head;
 
-            DoNothingGoal(WitherStormHead head) {
+            DoNothingGoal(WitherStormHeadEntity head) {
                 this.head = head;
                 setMutexBits(7);
             }
@@ -1363,8 +1381,8 @@ public final class SupplementalEntities {
         }
 
         private static class DistractionTargetGoal extends EntityAIBase {
-            private final WitherStormHead head;
-            DistractionTargetGoal(WitherStormHead head) { this.head = head; }
+            private final WitherStormHeadEntity head;
+            DistractionTargetGoal(WitherStormHeadEntity head) { this.head = head; }
             @Override
             public boolean shouldExecute() { return head.distractedPos != null && head.isActive() && !head.isHurt(); }
             @Override
@@ -1423,8 +1441,8 @@ public final class SupplementalEntities {
         }
     }
 
-    public static class WitherStormSegment extends StormPartBase {
-        private static final DataParameter<Boolean> DYING = EntityDataManager.createKey(WitherStormSegment.class,
+    public static class WitherStormSegmentEntity extends StormPartBase {
+        private static final DataParameter<Boolean> DYING = EntityDataManager.createKey(WitherStormSegmentEntity.class,
                 DataSerializers.BOOLEAN);
         private final int tillFreeFall;
         private int dropTime;
@@ -1434,11 +1452,13 @@ public final class SupplementalEntities {
         private double dropVelocity;
         private Vec3d wantedSegmentPos;
         private int deathTicks;
+        private final WitherStormSegmentManager segmentManager =
+                new WitherStormSegmentManager(this);
 
-        public WitherStormSegment(World world) {
+        public WitherStormSegmentEntity(World world) {
             super(world);
             setSize(15.0F, 17.5F);
-            tillFreeFall = LegacyWitherStormPartLogic.segmentFreeFallDelay(rand);
+            tillFreeFall = WitherStormPartLogic.segmentFreeFallDelay(rand);
             nextDropTime = 120 + rand.nextInt(160);
         }
 
@@ -1455,7 +1475,7 @@ public final class SupplementalEntities {
         @Override protected double getSickenedArmor() { return 6.0D; }
         @Override protected double getSickenedKnockbackResistance() { return 1.0D; }
         @Override public String getSickenedType() { return "wither_storm_segment"; }
-        @Override protected double[] getOffset(EntityWitherStormLegacy owner, int index) {
+        @Override protected double[] getOffset(WitherStormEntity owner, int index) {
             return new double[]{owner.getDesiredSegmentX(index + 1) - owner.posX,
                     owner.getDesiredSegmentY(index + 1) - owner.posY,
                     owner.getDesiredSegmentZ(index + 1) - owner.posZ};
@@ -1463,14 +1483,21 @@ public final class SupplementalEntities {
         @Override protected float getDamageTransfer() { return 0.5F; }
 
         @Override
-        public void bindTo(EntityWitherStormLegacy owner, int index) {
+        public boolean attackEntityFrom(DamageSource source, float amount) {
+            if (source.canHarmInCreative()) return attackPartDirectly(source, amount);
+            return !WitherStormConfig.witherStormInvulnerability
+                    && attackPartDirectly(source, 0.0F);
+        }
+
+        @Override
+        public void bindTo(WitherStormEntity owner, int index) {
             super.bindTo(owner, index);
             timeWithParent = 0;
             wantedSegmentPos = null;
         }
 
         @Override
-        protected void updateAttachedPosition(EntityWitherStormLegacy owner, double x, double y, double z) {
+        protected void updateAttachedPosition(WitherStormEntity owner, double x, double y, double z) {
             wantedSegmentPos = new Vec3d(x, y, z);
             updateDropState(owner);
             y += dropOffset;
@@ -1483,14 +1510,14 @@ public final class SupplementalEntities {
             setPosition(posX + (x - posX) * blend, posY + (y - posY) * blend, posZ + (z - posZ) * blend);
         }
 
-        private void updateDropState(EntityWitherStormLegacy owner) {
-            SupplementalEntities.CommandBlockCore commandBlock = owner.getBowelsCommandBlock();
+        private void updateDropState(WitherStormEntity owner) {
+            SupplementalEntities.CommandBlockEntity commandBlock = owner.getBowelsCommandBlock();
             if (commandBlock != null && commandBlock.getHealth() < commandBlock.getMaxHealth()) {
                 if (nextDropTime > 0) --nextDropTime;
                 if (nextDropTime == 0) {
-                    dropTime = LegacyWitherStormPartLogic.segmentDropDuration(rand);
+                    dropTime = WitherStormPartLogic.segmentDropDuration(rand);
                     float ratio = commandBlock.getHealth() / Math.max(1.0F, commandBlock.getMaxHealth());
-                    nextDropTime = LegacyWitherStormPartLogic.segmentDropCooldown(rand, ratio);
+                    nextDropTime = WitherStormPartLogic.segmentDropCooldown(rand, ratio);
                 }
             }
             if (dropTime > 0) --dropTime;
@@ -1515,16 +1542,26 @@ public final class SupplementalEntities {
                 return;
             }
             super.onLivingUpdate();
-            if (getOwnerStorm() != null) ++timeWithParent;
+            if (getOwnerStorm() != null) {
+                ++timeWithParent;
+                segmentManager.tick();
+            }
         }
 
         public void beginDeathSequence() {
             if (isInDeathSequence() || isDead) return;
             dataManager.set(DYING, true);
             deathTicks = 0;
+            segmentManager.transferTrackedEntitiesToOwner();
             setNoAI(true);
             setNoGravity(false);
             motionX = motionY = motionZ = 0.0D;
+        }
+
+        @Override
+        public void setDead() {
+            if (!world.isRemote) segmentManager.transferTrackedEntitiesToOwner();
+            super.setDead();
         }
 
         public boolean isInDeathSequence() { return dataManager.get(DYING); }
@@ -1559,7 +1596,7 @@ public final class SupplementalEntities {
         }
 
         protected void dropSmallMassCluster(int radius) {
-            BlockCluster cluster = new BlockCluster(world);
+            BlockClusterEntity cluster = new BlockClusterEntity(world);
             for (int x = -radius; x <= radius; x++) {
                 for (int y = -radius; y <= radius; y++) {
                     for (int z = -radius; z <= radius; z++) {
@@ -1597,6 +1634,9 @@ public final class SupplementalEntities {
             compound.setDouble("DropVelocity", dropVelocity);
             compound.setBoolean("DeathSequence", isInDeathSequence());
             compound.setInteger("DeathTicks", deathTicks);
+            NBTTagCompound manager = new NBTTagCompound();
+            segmentManager.writeToNBT(manager);
+            compound.setTag("WitherStormSegmentManager", manager);
         }
 
         @Override
@@ -1610,10 +1650,25 @@ public final class SupplementalEntities {
             dropVelocity = compound.getDouble("DropVelocity");
             dataManager.set(DYING, compound.getBoolean("DeathSequence"));
             deathTicks = Math.max(0, compound.getInteger("DeathTicks"));
+            if (compound.hasKey("WitherStormSegmentManager", 10)) {
+                segmentManager.readFromNBT(compound.getCompoundTag("WitherStormSegmentManager"));
+            }
             if (isInDeathSequence()) {
                 setNoAI(true);
                 setNoGravity(false);
             }
         }
+
+        @Nullable
+        EntityLivingBase getSegmentTarget(int head) { return segmentManager.getTarget(head); }
+        boolean isTargeting(Entity entity) {
+            if (entity == null) return false;
+            for (int head = 0; head < 3; head++) {
+                if (segmentManager.getTarget(head) == entity) return true;
+            }
+            return false;
+        }
+        Vec3d getSegmentHeadPosition(int head) { return segmentManager.getHeadPosition(head); }
+        WitherStormSegmentManager getSegmentManager() { return segmentManager; }
     }
 }

@@ -1,6 +1,6 @@
 package com.wdcftgg.witherstormmod.client.sound;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.util.SoundCategory;
@@ -10,11 +10,11 @@ import net.minecraft.util.math.MathHelper;
 /** 复刻上游倒地附加循环音的 40 tick 淡入和淡出。 */
 public class WitherStormTrembleSound extends MovingSound {
     private static final float FADE_TICKS = 40.0F;
-    private final EntityWitherStormLegacy storm;
+    private final WitherStormEntity storm;
     private float fade;
     private boolean stopping;
 
-    public WitherStormTrembleSound(EntityWitherStormLegacy storm, SoundEvent sound) {
+    public WitherStormTrembleSound(WitherStormEntity storm, SoundEvent sound) {
         super(sound, SoundCategory.AMBIENT);
         this.storm = storm;
         repeat = true;
@@ -42,7 +42,7 @@ public class WitherStormTrembleSound extends MovingSound {
         yPosF = (float) storm.posY;
         zPosF = (float) storm.posZ;
 
-        if (storm.getPlayDeadState() != EntityWitherStormLegacy.PlayDeadState.FALLING) {
+        if (storm.getPlayDeadState() != WitherStormEntity.PlayDeadState.FALLING) {
             requestStop();
         }
         if (stopping) {

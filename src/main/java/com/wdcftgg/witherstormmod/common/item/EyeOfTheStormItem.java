@@ -18,11 +18,11 @@ import net.minecraft.world.World;
 import javax.annotation.Nullable;
 import java.util.List;
 
-public class EyeOfTheStormItem extends LegacySwordItem {
+public class EyeOfTheStormItem extends CommandBlockSwordItem {
     private static final String ENTITY_HEALTH_RATIO = "EntityHealthRatio";
 
     public EyeOfTheStormItem(String name) {
-        super(name, LegacyToolMaterials.EYE_OF_THE_STORM);
+        super(name, ModToolMaterials.EYE_OF_THE_STORM);
     }
 
     @Override
@@ -75,7 +75,7 @@ public class EyeOfTheStormItem extends LegacySwordItem {
                 IBlockState state = owner.world.getBlockState(cursor);
                 AxisAlignedBB collision = state.getCollisionBoundingBox(owner.world, cursor);
                 if (collision != null) offset = collision.maxY;
-                owner.world.spawnEntity(new SupplementalEntities.TentacleSpike(owner.world, x, cursor.getY() + offset,
+                owner.world.spawnEntity(new SupplementalEntities.TentacleSpikeEntity(owner.world, x, cursor.getY() + offset,
                         z, yaw, delay, owner, damageModifier));
                 return;
             }

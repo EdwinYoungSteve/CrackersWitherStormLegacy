@@ -1,41 +1,41 @@
 package com.wdcftgg.witherstormmod.common.init;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.block.LegacyButtonBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyAxisBlock;
-import com.wdcftgg.witherstormmod.common.block.BlockSuperBeacon;
-import com.wdcftgg.witherstormmod.common.block.BlockSuperSupportBeacon;
-import com.wdcftgg.witherstormmod.common.block.BlockFireworkBundle;
-import com.wdcftgg.witherstormmod.common.block.BlockTaintedTorch;
-import com.wdcftgg.witherstormmod.common.block.BlockTaintedStandingSign;
-import com.wdcftgg.witherstormmod.common.block.BlockTaintedWallSign;
+import com.wdcftgg.witherstormmod.common.block.TaintedButtonBlock;
+import com.wdcftgg.witherstormmod.common.block.AxisBlock;
+import com.wdcftgg.witherstormmod.common.block.SuperBeaconBlock;
+import com.wdcftgg.witherstormmod.common.block.SuperSupportBeaconBlock;
+import com.wdcftgg.witherstormmod.common.block.FireworkBundleBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedTorchBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedStandingSignBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedWallSignBlock;
 import com.wdcftgg.witherstormmod.common.item.TaintedSignItem;
 import com.wdcftgg.witherstormmod.common.item.TaintedTorchItem;
-import com.wdcftgg.witherstormmod.common.item.LegacySlabItem;
-import com.wdcftgg.witherstormmod.common.item.LegacyRarityBlockItem;
-import com.wdcftgg.witherstormmod.common.block.LegacyDoorBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyFallingBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyFenceBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyFenceGateBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyFleshVeinsBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyExplosiveBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyPressurePlateBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyHorizontalBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyPaneBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacySlabBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyStairsBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyStrippableAxisBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTrapDoorBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedDustBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedDustLampBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedCarvedPumpkinBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedPumpkinBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedStatueBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyWallBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyTaintedMushroomBlock;
-import com.wdcftgg.witherstormmod.common.block.LegacyPottedTaintedMushroomBlock;
-import com.wdcftgg.witherstormmod.common.block.BlockWitheredPhlegm;
+import com.wdcftgg.witherstormmod.common.item.SlabItem;
+import com.wdcftgg.witherstormmod.common.item.RarityBlockItem;
+import com.wdcftgg.witherstormmod.common.block.TaintedDoorBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedSandBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedFenceBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedFenceGateBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedVeinBlock;
+import com.wdcftgg.witherstormmod.common.block.SimpleBlock;
+import com.wdcftgg.witherstormmod.common.block.PowerfulExplosiveBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedPressurePlateBlock;
+import com.wdcftgg.witherstormmod.common.block.DirectionalBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedGlassPaneBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedSlabBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedStairsBlock;
+import com.wdcftgg.witherstormmod.common.block.StrippableLogBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedTrapdoorBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedDustBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedDustLampBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedCarvedPumpkinBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedPumpkinBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedStatueBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedWallBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedMushroomBlock;
+import com.wdcftgg.witherstormmod.common.block.PottedTaintedMushroomBlock;
+import com.wdcftgg.witherstormmod.common.block.WitheredPhlegmBlock;
 import net.minecraft.block.BlockPressurePlate;
 import net.minecraft.block.Block;
 import net.minecraft.block.SoundType;
@@ -63,7 +63,7 @@ public final class ModBlocks {
 
     private static final Map<String, Block> BLOCKS = new LinkedHashMap<String, Block>();
     private static final Map<String, Item> BLOCK_ITEMS = new LinkedHashMap<String, Item>();
-    private static final String[] BLOCK_NAMES = LegacyRegistryNames.blockNames();
+    private static final String[] BLOCK_NAMES = ModRegistryNames.blockNames();
 
     static {
         for (String name : BLOCK_NAMES) {
@@ -86,7 +86,7 @@ public final class ModBlocks {
     }
 
     public static boolean isItemless(String name) {
-        return LegacyRegistryNames.isItemlessBlock(name);
+        return ModRegistryNames.isItemlessBlock(name);
     }
 
     public static Item getItem(String name) {
@@ -106,20 +106,20 @@ public final class ModBlocks {
             }
             Item item;
             String name = block.getRegistryName().getPath();
-            if (block instanceof LegacyDoorBlock) item = new ItemDoor(block);
-            else if (block instanceof LegacySlabBlock) item = new LegacySlabItem((LegacySlabBlock) block);
+            if (block instanceof TaintedDoorBlock) item = new ItemDoor(block);
+            else if (block instanceof TaintedSlabBlock) item = new SlabItem((TaintedSlabBlock) block);
             else if ("tainted_sign".equals(name)) item = new TaintedSignItem(name);
             else if ("tainted_torch".equals(name)) item = new TaintedTorchItem(name);
             else if ("formidibomb".equals(name)) item = new FormidibombItem(block);
-            else if (block instanceof LegacyTaintedCarvedPumpkinBlock) item = new TaintedCarvedPumpkinItem(block);
+            else if (block instanceof TaintedCarvedPumpkinBlock) item = new TaintedCarvedPumpkinItem(block);
             else item = createRarityBlockItem(block, name);
             item.setRegistryName(block.getRegistryName());
             item.setTranslationKey(block.getTranslationKey().replace("tile.", ""));
             item.setCreativeTab(ModCreativeTabs.MAIN);
             BLOCK_ITEMS.put(name, item);
             event.getRegistry().register(item);
-            if (block instanceof LegacyTaintedCarvedPumpkinBlock) {
-                ((LegacyTaintedCarvedPumpkinBlock) block).registerDispenserBehavior(item);
+            if (block instanceof TaintedCarvedPumpkinBlock) {
+                ((TaintedCarvedPumpkinBlock) block).registerDispenserBehavior(item);
             }
         }
     }
@@ -136,7 +136,7 @@ public final class ModBlocks {
             }
             ModelResourceLocation inventoryModel = new ModelResourceLocation(block.getRegistryName(), "inventory");
             ModelLoader.setCustomModelResourceLocation(item, 0, inventoryModel);
-            if (block instanceof LegacyWallBlock) {
+            if (block instanceof TaintedWallBlock) {
                 ModelLoader.setCustomModelResourceLocation(item, 1, inventoryModel);
             }
         }
@@ -144,43 +144,43 @@ public final class ModBlocks {
 
     private static Block createBlock(String name) {
         if ("super_tnt".equals(name)) {
-            return new LegacyExplosiveBlock(name, false);
+            return new PowerfulExplosiveBlock(name, false);
         }
         if ("formidibomb".equals(name)) {
-            return new LegacyExplosiveBlock(name, true);
+            return new PowerfulExplosiveBlock(name, true);
         }
         if ("super_beacon".equals(name)) {
-            return new BlockSuperBeacon(name);
+            return new SuperBeaconBlock(name);
         }
         if ("super_support_beacon".equals(name)) {
-            return new BlockSuperSupportBeacon(name);
+            return new SuperSupportBeaconBlock(name);
         }
         if ("firework_bundle".equals(name)) {
-            return new BlockFireworkBundle(name);
+            return new FireworkBundleBlock(name);
         }
         if ("withered_phlegm_block".equals(name)) {
-            return new BlockWitheredPhlegm(name);
+            return new WitheredPhlegmBlock(name);
         }
         if ("tainted_torch".equals(name)) {
-            return new BlockTaintedTorch(name, false);
+            return new TaintedTorchBlock(name, false);
         }
         if ("tainted_wall_torch".equals(name)) {
-            return new BlockTaintedTorch(name, true);
+            return new TaintedTorchBlock(name, true);
         }
         if ("tainted_sign".equals(name)) {
-            return new BlockTaintedStandingSign(name);
+            return new TaintedStandingSignBlock(name);
         }
         if ("tainted_wall_sign".equals(name)) {
-            return new BlockTaintedWallSign(name);
+            return new TaintedWallSignBlock(name);
         }
         if ("tainted_dust".equals(name)) {
-            return new LegacyTaintedDustBlock(name);
+            return new TaintedDustBlock(name);
         }
         if ("tainted_dust_block".equals(name)) {
-            return new LegacyTaintedDustLampBlock(name);
+            return new TaintedDustLampBlock(name);
         }
         if ("tainted_flesh_veins".equals(name)) {
-            return new LegacyFleshVeinsBlock(name);
+            return new TaintedVeinBlock(name);
         }
         if ("tainted_flesh_block".equals(name)) {
             return createSimpleBlock(name, Material.CLOTH, 0.6F, 0.6F, SoundType.SLIME, false);
@@ -192,16 +192,16 @@ public final class ModBlocks {
             return createSimpleBlock(name, Material.CLOTH, -1.0F, 3600000.0F, SoundType.SLIME, false);
         }
         if ("tainted_mushroom".equals(name)) {
-            return new LegacyTaintedMushroomBlock(name);
+            return new TaintedMushroomBlock(name);
         }
         if ("potted_tainted_mushroom".equals(name)) {
-            return new LegacyPottedTaintedMushroomBlock(name);
+            return new PottedTaintedMushroomBlock(name);
         }
         if ("tainted_pumpkin".equals(name)) {
-            return new LegacyTaintedPumpkinBlock(name);
+            return new TaintedPumpkinBlock(name);
         }
         if ("tainted_carved_pumpkin".equals(name) || "tainted_jack_o_lantern".equals(name)) {
-            return new LegacyTaintedCarvedPumpkinBlock(name, "tainted_jack_o_lantern".equals(name));
+            return new TaintedCarvedPumpkinBlock(name, "tainted_jack_o_lantern".equals(name));
         }
         if ("tainted_stone".equals(name)) {
             return createSimpleBlock(name, Material.ROCK, 1.5F, 6.0F, SoundType.STONE, true);
@@ -227,57 +227,57 @@ public final class ModBlocks {
         }
         if ("tainted_zombie_sitting".equals(name) || "tainted_zombie_wall".equals(name)
                 || "tainted_zombie_lying".equals(name)) {
-            return new LegacyTaintedStatueBlock(name,
-                    LegacyTaintedStatueBlock.StatueMaterial.TAINTED_ZOMBIE);
+            return new TaintedStatueBlock(name,
+                    TaintedStatueBlock.StatueMaterial.TAINTED_ZOMBIE);
         }
         if ("tainted_bone_pile".equals(name) || "tainted_skeleton_wall".equals(name)
                 || "tainted_skull_ceiling".equals(name)) {
-            return new LegacyTaintedStatueBlock(name,
-                    LegacyTaintedStatueBlock.StatueMaterial.TAINTED_BONE);
+            return new TaintedStatueBlock(name,
+                    TaintedStatueBlock.StatueMaterial.TAINTED_BONE);
         }
         if ("tainted_log".equals(name)) {
-            return new LegacyStrippableAxisBlock(name, "stripped_tainted_log");
+            return new StrippableLogBlock(name, "stripped_tainted_log");
         }
         if ("tainted_wood".equals(name)) {
-            return new LegacyStrippableAxisBlock(name, "stripped_tainted_wood");
+            return new StrippableLogBlock(name, "stripped_tainted_wood");
         }
         if (name.endsWith("_log") || name.endsWith("_wood")) {
-            return new LegacyAxisBlock(name);
+            return new AxisBlock(name);
         }
         if (name.endsWith("_slab")) {
-            return new LegacySlabBlock(name, name.equals("tainted_slab") ? Material.WOOD : Material.ROCK);
+            return new TaintedSlabBlock(name, name.equals("tainted_slab") ? Material.WOOD : Material.ROCK);
         }
         if (name.endsWith("_wall")) {
-            return new LegacyWallBlock(name, modelSource(name.replace("_wall", "")));
+            return new TaintedWallBlock(name, modelSource(name.replace("_wall", "")));
         }
         if ("tainted_glass_pane".equals(name)) {
-            return new LegacyPaneBlock(name);
+            return new TaintedGlassPaneBlock(name);
         }
         if (name.endsWith("_stairs")) {
             boolean heavyStone = "tainted_stone_stairs".equals(name) || "tainted_cobblestone_stairs".equals(name);
-            return new LegacyStairsBlock(name, modelSource(name).getDefaultState(), heavyStone ? 3.0F : 2.0F,
+            return new TaintedStairsBlock(name, modelSource(name).getDefaultState(), heavyStone ? 3.0F : 2.0F,
                     heavyStone ? 6.0F : 3.0F);
         }
         if (name.endsWith("_fence")) {
-            return new LegacyFenceBlock(name, Material.WOOD, MapColor.PURPLE);
+            return new TaintedFenceBlock(name, Material.WOOD, MapColor.PURPLE);
         }
         if (name.endsWith("_fence_gate")) {
-            return new LegacyFenceGateBlock(name);
+            return new TaintedFenceGateBlock(name);
         }
         if (name.endsWith("_door")) {
-            return new LegacyDoorBlock(name);
+            return new TaintedDoorBlock(name);
         }
         if (name.endsWith("_trapdoor")) {
-            return new LegacyTrapDoorBlock(name);
+            return new TaintedTrapdoorBlock(name);
         }
         if (name.endsWith("_button")) {
-            return new LegacyButtonBlock(name, !name.contains("stone"));
+            return new TaintedButtonBlock(name, !name.contains("stone"));
         }
         if (name.endsWith("_pressure_plate")) {
-            return new LegacyPressurePlateBlock(name, name.contains("stone") ? Material.ROCK : Material.WOOD, BlockPressurePlate.Sensitivity.EVERYTHING);
+            return new TaintedPressurePlateBlock(name, name.contains("stone") ? Material.ROCK : Material.WOOD, BlockPressurePlate.Sensitivity.EVERYTHING);
         }
         if (name.endsWith("_sand")) {
-            return new LegacyFallingBlock(name, Material.SAND);
+            return new TaintedSandBlock(name, Material.SAND);
         }
 
         Material material = materialFor(name);
@@ -286,7 +286,7 @@ public final class ModBlocks {
 
     private static Block createSimpleBlock(String name, Material material, float hardness, float resistance,
                                            SoundType soundType, boolean requiresPickaxe) {
-        LegacyBlock block = new LegacyBlock(name, material, hardness, resistance, soundType);
+        SimpleBlock block = new SimpleBlock(name, material, hardness, resistance, soundType);
         if (material == Material.GLASS) {
             block.setLightOpacity(0);
         }
@@ -297,14 +297,14 @@ public final class ModBlocks {
     }
 
     private static Item createRarityBlockItem(Block block, String name) {
-        if ("super_tnt".equals(name)) return new LegacyRarityBlockItem(block, EnumRarity.RARE);
-        if ("super_beacon".equals(name)) return new LegacyRarityBlockItem(block, EnumRarity.EPIC);
-        if ("super_support_beacon".equals(name)) return new LegacyRarityBlockItem(block, EnumRarity.RARE);
-        if ("tainted_dust".equals(name)) return new LegacyRarityBlockItem(block, EnumRarity.UNCOMMON);
-        if ("withered_phlegm_block".equals(name)) return new LegacyRarityBlockItem(block, EnumRarity.UNCOMMON);
+        if ("super_tnt".equals(name)) return new RarityBlockItem(block, EnumRarity.RARE);
+        if ("super_beacon".equals(name)) return new RarityBlockItem(block, EnumRarity.EPIC);
+        if ("super_support_beacon".equals(name)) return new RarityBlockItem(block, EnumRarity.RARE);
+        if ("tainted_dust".equals(name)) return new RarityBlockItem(block, EnumRarity.UNCOMMON);
+        if ("withered_phlegm_block".equals(name)) return new RarityBlockItem(block, EnumRarity.UNCOMMON);
         if (name.startsWith("tainted_zombie_") || name.startsWith("tainted_skeleton_")
                 || "tainted_bone_pile".equals(name) || "tainted_skull_ceiling".equals(name)) {
-            return new LegacyRarityBlockItem(block, EnumRarity.UNCOMMON);
+            return new RarityBlockItem(block, EnumRarity.UNCOMMON);
         }
         return new ItemBlock(block);
     }
@@ -343,6 +343,6 @@ public final class ModBlocks {
         if (block.getRegistryName() == null) {
             return false;
         }
-        return LegacyRegistryNames.isItemlessBlock(block.getRegistryName().getPath());
+        return ModRegistryNames.isItemlessBlock(block.getRegistryName().getPath());
     }
 }

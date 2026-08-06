@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.client.model.witherstorm.mass;
-import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.CubeDeformation;
-import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.CubeListBuilder;
-import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.PartDefinition;
-import com.wdcftgg.witherstormmod.client.model.witherstorm.LegacyModelBuilders.PartPose;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.CubeDeformation;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.CubeListBuilder;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.PartDefinition;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.PartPose;
 
 
 

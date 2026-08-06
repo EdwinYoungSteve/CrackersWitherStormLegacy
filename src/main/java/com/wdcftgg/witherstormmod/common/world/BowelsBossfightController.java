@@ -1,13 +1,13 @@
 package com.wdcftgg.witherstormmod.common.world;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityPowerfulExplosive;
-import com.wdcftgg.witherstormmod.common.entity.EntitySickenedMob;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
+import com.wdcftgg.witherstormmod.common.entity.SickenedMobEntity;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.init.ModItems;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
-import com.wdcftgg.witherstormmod.common.network.LegacyNetwork;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -56,7 +56,7 @@ public final class BowelsBossfightController {
     private BowelsBossfightController() {
     }
 
-    public static void tick(SupplementalEntities.CommandBlockCore core) {
+    public static void tick(SupplementalEntities.CommandBlockEntity core) {
         if (core.world.isRemote || !(core.world instanceof WorldServer)) return;
         WorldServer world = (WorldServer) core.world;
         BowelsInstanceData data = BowelsInstanceData.get(world);
@@ -79,7 +79,7 @@ public final class BowelsBossfightController {
         if (ticks % 20 == 0) data.markDirty();
     }
 
-    public static boolean attack(SupplementalEntities.CommandBlockCore core, DamageSource source) {
+    public static boolean attack(SupplementalEntities.CommandBlockEntity core, DamageSource source) {
         if (core.world.isRemote || !(core.world instanceof WorldServer) || !isCommandBlockTool(source)) return false;
         WorldServer world = (WorldServer) core.world;
         BowelsInstanceData data = BowelsInstanceData.get(world);
@@ -105,7 +105,7 @@ public final class BowelsBossfightController {
         return true;
     }
 
-    private static void advance(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void advance(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                 BowelsInstanceData data, BowelsInstanceData.Instance instance) {
         finishPhase(world, core, instance.bossPhase);
         instance.bossPhase = Math.min(18, instance.bossPhase + 1);
@@ -114,13 +114,13 @@ public final class BowelsBossfightController {
         data.markDirty();
     }
 
-    private static void initPhase(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void initPhase(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                   BowelsInstanceData.Instance instance, int phase) {
         switch (phase) {
             case 1:
             case 6:
             case 12:
-                LegacyNetwork.shakeTracking(core, 240.0F, 12.0F);
+                ModNetwork.shakeTracking(core, 240.0F, 12.0F);
                 awakenTentacles(world, core, false);
                 play(world, core, "loud_tremble", SoundCategory.AMBIENT, 1.0F);
                 play(world, core, "bowels_loud_hurt", SoundCategory.HOSTILE, 1.0F);
@@ -131,7 +131,7 @@ public final class BowelsBossfightController {
             case 2:
             case 7:
             case 13:
-                LegacyNetwork.shakeTracking(core, 120.0F, 12.0F);
+                ModNetwork.shakeTracking(core, 120.0F, 12.0F);
                 core.createPodiumCluster();
                 play(world, core, "loud_tremble", SoundCategory.AMBIENT, 1.0F);
                 break;
@@ -139,14 +139,14 @@ public final class BowelsBossfightController {
                 activateWave(world, core, 1, 60);
                 break;
             case 9:
-                LegacyNetwork.shakeTracking(core, 120.0F, 8.0F);
+                ModNetwork.shakeTracking(core, 120.0F, 8.0F);
                 activateWave(world, core, 2, 80);
                 break;
             case 10:
                 curlTentacles(world, core);
                 break;
             case 14:
-                LegacyNetwork.shakeTracking(core, 120.0F, 16.0F);
+                ModNetwork.shakeTracking(core, 120.0F, 16.0F);
                 activateWave(world, core, 3, 120);
                 activateHeads(world, core);
                 break;
@@ -154,23 +154,23 @@ public final class BowelsBossfightController {
                 curlTentacles(world, core);
                 break;
             case 17:
-                LegacyNetwork.shakeTracking(core, 240.0F, 14.0F);
-                LegacyNetwork.blindTracking(core, 240, 120, 80);
+                ModNetwork.shakeTracking(core, 240.0F, 14.0F);
+                ModNetwork.blindTracking(core, 240, 120, 80);
                 play(world, core, "loud_tremble", SoundCategory.AMBIENT, 5.0F);
                 play(world, core, "bowels_loud_hurt", SoundCategory.HOSTILE, 5.0F);
                 play(world, core, "command_block_destruct", SoundCategory.HOSTILE, 64.0F);
-                for (SickenedEntities.Tentacle tentacle : world.getEntitiesWithinAABB(SickenedEntities.Tentacle.class,
+                for (SickenedEntities.TentacleEntity tentacle : world.getEntitiesWithinAABB(SickenedEntities.TentacleEntity.class,
                         core.getEntityBoundingBox().grow(50.0D))) {
                     tentacle.setDormant(false);
                     tentacle.doIndefiniteAwakeAnimation();
                     tentacle.setCanSwing(false);
                     tentacle.setCanStrangle(false);
                 }
-                for (SupplementalEntities.WitherStormHead head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHead.class,
+                for (SupplementalEntities.WitherStormHeadEntity head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHeadEntity.class,
                         core.getEntityBoundingBox().grow(50.0D))) head.setDead();
-                for (EntitySickenedMob mob : world.getEntitiesWithinAABB(EntitySickenedMob.class,
+                for (SickenedMobEntity mob : world.getEntitiesWithinAABB(SickenedMobEntity.class,
                         core.getEntityBoundingBox().grow(50.0D))) {
-                    if (mob != core && !(mob instanceof SickenedEntities.Tentacle)) mob.setDead();
+                    if (mob != core && !(mob instanceof SickenedEntities.TentacleEntity)) mob.setDead();
                 }
                 break;
             default:
@@ -178,7 +178,7 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void tickPhase(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void tickPhase(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                   BowelsInstanceData.Instance instance, int phase, int ticks) {
         if (phase == 2 || phase == 7 || phase == 13) {
             core.findPodiumCluster();
@@ -200,7 +200,7 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void activateWave(WorldServer world, SupplementalEntities.CommandBlockCore core, int wave, int particleCount) {
+    private static void activateWave(WorldServer world, SupplementalEntities.CommandBlockEntity core, int wave, int particleCount) {
         play(world, core, "command_block_activates", SoundCategory.HOSTILE, wave == 3 ? 6.0F : 5.0F);
         for (int i = 0; i < particleCount; i++) {
             world.spawnParticle(EnumParticleTypes.PORTAL, core.posX, core.posY + 0.5D, core.posZ,
@@ -209,7 +209,7 @@ public final class BowelsBossfightController {
         if (wave > 1) awakenTentacles(world, core, false);
     }
 
-    private static void finishPhase(WorldServer world, SupplementalEntities.CommandBlockCore core, int phase) {
+    private static void finishPhase(WorldServer world, SupplementalEntities.CommandBlockEntity core, int phase) {
         if (phase == 4 || phase == 9) {
             play(world, core, "command_block_power_down", SoundCategory.HOSTILE, 5.0F);
         } else if (phase == 14) {
@@ -217,8 +217,8 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void awakenTentacles(WorldServer world, SupplementalEntities.CommandBlockCore core, boolean indefinite) {
-        for (SickenedEntities.Tentacle tentacle : world.getEntitiesWithinAABB(SickenedEntities.Tentacle.class,
+    private static void awakenTentacles(WorldServer world, SupplementalEntities.CommandBlockEntity core, boolean indefinite) {
+        for (SickenedEntities.TentacleEntity tentacle : world.getEntitiesWithinAABB(SickenedEntities.TentacleEntity.class,
                 core.getEntityBoundingBox().grow(50.0D))) {
             tentacle.setDormant(false);
             if (indefinite) tentacle.doIndefiniteAwakeAnimation();
@@ -228,13 +228,13 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void curlTentacles(WorldServer world, SupplementalEntities.CommandBlockCore core) {
-        for (SickenedEntities.Tentacle tentacle : world.getEntitiesWithinAABB(SickenedEntities.Tentacle.class,
+    private static void curlTentacles(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
+        for (SickenedEntities.TentacleEntity tentacle : world.getEntitiesWithinAABB(SickenedEntities.TentacleEntity.class,
                 core.getEntityBoundingBox().grow(50.0D))) tentacle.curlAround(core.getPositionVector());
     }
 
-    private static void activateHeads(WorldServer world, SupplementalEntities.CommandBlockCore core) {
-        for (SupplementalEntities.WitherStormHead head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHead.class,
+    private static void activateHeads(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
+        for (SupplementalEntities.WitherStormHeadEntity head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHeadEntity.class,
                 core.getEntityBoundingBox().grow(50.0D))) {
             head.setActive(true);
             head.setRoar(false);
@@ -243,16 +243,16 @@ public final class BowelsBossfightController {
     }
 
     private static void injureStormHeads(WorldServer world, BowelsInstanceData.Instance instance) {
-        EntityWitherStormLegacy storm = findStorm(world, instance.stormUuid);
+        WitherStormEntity storm = findStorm(world, instance.stormUuid);
         if (storm == null) return;
         for (int i = 0; i < 3; i++) {
             if (world.rand.nextFloat() > 0.6F) storm.attackHead(i, null);
         }
     }
 
-    private static void spawnWaveMob(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void spawnWaveMob(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                      MobWeight[] weights, double healthBonus) {
-        EntitySickenedMob mob = createMob(world, choose(weights, world.rand));
+        SickenedMobEntity mob = createMob(world, choose(weights, world.rand));
         if (mob == null) return;
         BlockPos pos = randomNearbyPosition(world, core, 50, 6);
         if (pos == null) {
@@ -272,10 +272,10 @@ public final class BowelsBossfightController {
                 20, 0.25D, 0.5D, 0.25D, 0.01D);
     }
 
-    private static void equipWaveMob(EntitySickenedMob mob, WorldServer world, boolean hard) {
+    private static void equipWaveMob(SickenedMobEntity mob, WorldServer world, boolean hard) {
         if (!(mob instanceof EntityMob)) return;
         ItemStack weapon;
-        if (mob instanceof SickenedEntities.SickenedSkeleton || mob instanceof SickenedEntities.SickenedPillager) {
+        if (mob instanceof SickenedEntities.SickenedSkeletonEntity || mob instanceof SickenedEntities.SickenedPillagerEntity) {
             weapon = new ItemStack(hard ? Items.IRON_SWORD : Items.BOW);
         } else {
             weapon = new ItemStack(hard ? Items.DIAMOND_SWORD : Items.IRON_SWORD);
@@ -287,10 +287,10 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void spawnRushSymbiont(WorldServer world, SupplementalEntities.CommandBlockCore core) {
+    private static void spawnRushSymbiont(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
         BlockPos pos = randomNearbyPosition(world, core, 50, 6);
         if (pos == null) return;
-        SickenedEntities.WitheredSymbiont symbiont = new SickenedEntities.WitheredSymbiont(world);
+        SickenedEntities.WitheredSymbiontEntity symbiont = new SickenedEntities.WitheredSymbiontEntity(world);
         symbiont.setPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
         symbiont.setNonBossMode(true);
         symbiont.setRushMode(true);
@@ -304,20 +304,20 @@ public final class BowelsBossfightController {
         symbiont.playSound(ModSounds.get("withered_symbiont_spawn"), 4.0F, 1.0F);
     }
 
-    private static boolean guardsDefeated(WorldServer world, SupplementalEntities.CommandBlockCore core) {
+    private static boolean guardsDefeated(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
         AxisAlignedBB area = core.getEntityBoundingBox().grow(50.0D);
-        for (SickenedEntities.WitheredSymbiont symbiont : world.getEntitiesWithinAABB(SickenedEntities.WitheredSymbiont.class, area)) {
+        for (SickenedEntities.WitheredSymbiontEntity symbiont : world.getEntitiesWithinAABB(SickenedEntities.WitheredSymbiontEntity.class, area)) {
             if (!symbiont.isDead && symbiont.isEntityAlive()) return false;
         }
-        for (SupplementalEntities.WitherStormHead head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHead.class, area)) {
+        for (SupplementalEntities.WitherStormHeadEntity head : world.getEntitiesWithinAABB(SupplementalEntities.WitherStormHeadEntity.class, area)) {
             if (!head.isDead && head.isActive() && !head.isPlayingDead() && !head.isHurt()) return false;
         }
         return true;
     }
 
-    private static void resolveDeath(WorldServer bowels, SupplementalEntities.CommandBlockCore core,
+    private static void resolveDeath(WorldServer bowels, SupplementalEntities.CommandBlockEntity core,
                                      BowelsInstanceData.Instance instance) {
-        EntityWitherStormLegacy storm = findStorm(bowels, instance.stormUuid);
+        WitherStormEntity storm = findStorm(bowels, instance.stormUuid);
         if (storm != null && !storm.isDead) storm.finishBowelsDeath();
         for (EntityPlayerMP player : playersNear(bowels, core, 192.0D)) {
             BowelsManager.leave(player);
@@ -327,29 +327,29 @@ public final class BowelsBossfightController {
         instance.bossPhaseTicks = 0;
     }
 
-    private static void cleanup(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void cleanup(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                 BowelsInstanceData.Instance instance) {
         for (Entity entity : world.getEntitiesWithinAABB(Entity.class, core.getEntityBoundingBox().grow(64.0D))) {
             if (entity != core && !(entity instanceof EntityPlayerMP)) entity.setDead();
         }
         core.setDead();
         instance.completed = true;
-        LegacyChunkLoadingManager.INSTANCE.releaseBowelsInstance(world, instance.stormUuid);
+        ChunkLoadingManager.INSTANCE.releaseBowelsInstance(world, instance.stormUuid);
         BowelsInstanceData.get(world).markDirty();
     }
 
     @Nullable
-    private static EntityWitherStormLegacy findStorm(WorldServer world, UUID uuid) {
+    private static WitherStormEntity findStorm(WorldServer world, UUID uuid) {
         if (world.getMinecraftServer() == null) return null;
         for (WorldServer level : world.getMinecraftServer().worlds) {
             if (level == null) continue;
             Entity entity = level.getEntityFromUuid(uuid);
-            if (entity instanceof EntityWitherStormLegacy) return (EntityWitherStormLegacy) entity;
+            if (entity instanceof WitherStormEntity) return (WitherStormEntity) entity;
         }
         return null;
     }
 
-    private static List<EntityPlayerMP> playersNear(WorldServer world, SupplementalEntities.CommandBlockCore core, double radius) {
+    private static List<EntityPlayerMP> playersNear(WorldServer world, SupplementalEntities.CommandBlockEntity core, double radius) {
         List<EntityPlayerMP> result = new ArrayList<EntityPlayerMP>();
         for (EntityPlayerMP player : world.getEntitiesWithinAABB(EntityPlayerMP.class,
                 core.getEntityBoundingBox().grow(radius))) result.add(player);
@@ -357,7 +357,7 @@ public final class BowelsBossfightController {
     }
 
     @Nullable
-    private static BlockPos randomNearbyPosition(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static BlockPos randomNearbyPosition(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                                  int diameter, int attempts) {
         for (int attempt = 0; attempt < attempts; attempt++) {
             int x = Math.floorDiv(core.getPosition().getX() + world.rand.nextInt(diameter) - diameter / 2, 1);
@@ -395,7 +395,7 @@ public final class BowelsBossfightController {
         world.playSound(null, core.getPosition(), ModSounds.get(sound), category, volume, 1.0F);
     }
 
-    private static void play(WorldServer world, SupplementalEntities.CommandBlockCore core,
+    private static void play(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                              String sound, SoundCategory category, float volume) {
         play(world, (Entity) core, sound, category, volume);
     }
@@ -405,25 +405,25 @@ public final class BowelsBossfightController {
     }
 
     @Nullable
-    private static EntitySickenedMob createMob(WorldServer world, @Nullable MobWeight selected) {
+    private static SickenedMobEntity createMob(WorldServer world, @Nullable MobWeight selected) {
         if (selected == null) return null;
-        if ("zombie".equals(selected.name)) return new SickenedEntities.SickenedZombie(world);
-        if ("skeleton".equals(selected.name)) return new SickenedEntities.SickenedSkeleton(world);
-        if ("spider".equals(selected.name)) return new SickenedEntities.SickenedSpider(world);
-        if ("creeper".equals(selected.name)) return new SickenedEntities.SickenedCreeper(world);
-        if ("iron_golem".equals(selected.name)) return new SickenedEntities.SickenedIronGolem(world);
-        if ("villager".equals(selected.name)) return new SickenedEntities.SickenedVillager(world);
-        if ("phantom".equals(selected.name)) return new SickenedEntities.SickenedPhantom(world);
-        if ("chicken".equals(selected.name)) return new SickenedEntities.SickenedChicken(world);
-        if ("cow".equals(selected.name)) return new SickenedEntities.SickenedCow(world);
-        if ("mushroom_cow".equals(selected.name)) return new SickenedEntities.SickenedMushroomCow(world);
-        if ("pig".equals(selected.name)) return new SickenedEntities.SickenedPig(world);
-        if ("bee".equals(selected.name)) return new SickenedEntities.SickenedBee(world);
-        if ("parrot".equals(selected.name)) return new SickenedEntities.SickenedParrot(world);
-        if ("wolf".equals(selected.name)) return new SickenedEntities.SickenedWolf(world);
-        if ("cat".equals(selected.name)) return new SickenedEntities.SickenedCat(world);
-        if ("pillager".equals(selected.name)) return new SickenedEntities.SickenedPillager(world);
-        if ("vindicator".equals(selected.name)) return new SickenedEntities.SickenedVindicator(world);
+        if ("zombie".equals(selected.name)) return new SickenedEntities.SickenedZombieEntity(world);
+        if ("skeleton".equals(selected.name)) return new SickenedEntities.SickenedSkeletonEntity(world);
+        if ("spider".equals(selected.name)) return new SickenedEntities.SickenedSpiderEntity(world);
+        if ("creeper".equals(selected.name)) return new SickenedEntities.SickenedCreeperEntity(world);
+        if ("iron_golem".equals(selected.name)) return new SickenedEntities.SickenedIronGolemEntity(world);
+        if ("villager".equals(selected.name)) return new SickenedEntities.SickenedVillagerEntity(world);
+        if ("phantom".equals(selected.name)) return new SickenedEntities.SickenedPhantomEntity(world);
+        if ("chicken".equals(selected.name)) return new SickenedEntities.SickenedChickenEntity(world);
+        if ("cow".equals(selected.name)) return new SickenedEntities.SickenedCowEntity(world);
+        if ("mushroom_cow".equals(selected.name)) return new SickenedEntities.SickenedMushroomCowEntity(world);
+        if ("pig".equals(selected.name)) return new SickenedEntities.SickenedPigEntity(world);
+        if ("bee".equals(selected.name)) return new SickenedEntities.SickenedBeeEntity(world);
+        if ("parrot".equals(selected.name)) return new SickenedEntities.SickenedParrotEntity(world);
+        if ("wolf".equals(selected.name)) return new SickenedEntities.SickenedWolfEntity(world);
+        if ("cat".equals(selected.name)) return new SickenedEntities.SickenedCatEntity(world);
+        if ("pillager".equals(selected.name)) return new SickenedEntities.SickenedPillagerEntity(world);
+        if ("vindicator".equals(selected.name)) return new SickenedEntities.SickenedVindicatorEntity(world);
         return null;
     }
 

@@ -29,6 +29,6 @@ public final class UpstreamResourcePackInstaller {
         String expectedName = file.getName();
         defaultPacks.removeIf(pack -> expectedName.equals(pack.getPackName()));
         // 原版 1.20 资源包只提供媒体资源，端口内置的 1.12 兼容定义必须保持更高优先级。
-        defaultPacks.add(0, new LegacyUpstreamResourcePack(file));
+        defaultPacks.add(0, new UpstreamResourcePack(file));
     }
 }

@@ -87,7 +87,7 @@ public final class SickenedEntities {
     private SickenedEntities() {
     }
 
-    private abstract static class FlyingSickenedMob extends EntitySickenedMob {
+    private abstract static class FlyingSickenedMob extends SickenedMobEntity {
         FlyingSickenedMob(World world) {
             super(world);
             moveHelper = new EntityFlyHelper(this);
@@ -122,8 +122,8 @@ public final class SickenedEntities {
         @Override protected void updateFallState(double y, boolean onGround, IBlockState state, BlockPos pos) { }
     }
 
-    public static class SickenedBee extends FlyingSickenedMob {
-        public SickenedBee(World world) { super(world); setSize(0.7F, 0.6F); }
+    public static class SickenedBeeEntity extends FlyingSickenedMob {
+        public SickenedBeeEntity(World world) { super(world); setSize(0.7F, 0.6F); }
         @Override public String getSickenedType() { return "sickened_bee"; }
         @Override protected double getSickenedHealth() { return 15.0D; }
         @Override protected double getSickenedSpeed() { return 0.3D; }
@@ -143,8 +143,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedCat extends EntitySickenedMob {
-        public SickenedCat(World world) { super(world); setSize(0.6F, 0.7F); }
+    public static class SickenedCatEntity extends SickenedMobEntity {
+        public SickenedCatEntity(World world) { super(world); setSize(0.6F, 0.7F); }
         @Override protected double getSickenedHealth() { return 20.0D; }
         @Override protected double getSickenedSpeed() { return 0.32D; }
         @Override protected double getSickenedDamage() { return 4.0D; }
@@ -169,8 +169,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedChicken extends EntitySickenedMob {
-        public SickenedChicken(World world) { super(world); setSize(0.4F, 0.7F); }
+    public static class SickenedChickenEntity extends SickenedMobEntity {
+        public SickenedChickenEntity(World world) { super(world); setSize(0.4F, 0.7F); }
         @Override protected double getSickenedHealth() { return 16.0D; }
         @Override protected double getSickenedSpeed() { return 0.25D; }
         @Override protected double getSickenedDamage() { return 2.0D; }
@@ -181,8 +181,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedCow extends EntitySickenedMob {
-        public SickenedCow(World world) { super(world); setSize(0.9F, 1.4F); }
+    public static class SickenedCowEntity extends SickenedMobEntity {
+        public SickenedCowEntity(World world) { super(world); setSize(0.9F, 1.4F); }
         @Override protected double getSickenedHealth() { return 25.0D; }
         @Override protected double getSickenedSpeed() { return 0.2D; }
         @Override protected double getSickenedDamage() { return 2.0D; }
@@ -193,9 +193,9 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedCreeper extends EntitySickenedMob {
-        private static final DataParameter<Integer> SWELL_STATE = EntityDataManager.createKey(SickenedCreeper.class, DataSerializers.VARINT);
-        private static final DataParameter<Boolean> POWERED = EntityDataManager.createKey(SickenedCreeper.class, DataSerializers.BOOLEAN);
+    public static class SickenedCreeperEntity extends SickenedMobEntity {
+        private static final DataParameter<Integer> SWELL_STATE = EntityDataManager.createKey(SickenedCreeperEntity.class, DataSerializers.VARINT);
+        private static final DataParameter<Boolean> POWERED = EntityDataManager.createKey(SickenedCreeperEntity.class, DataSerializers.BOOLEAN);
         private int oldSwell;
         private int swell;
         private int maxSwell = 40;
@@ -205,7 +205,7 @@ public final class SickenedEntities {
             dataManager.set(SWELL_STATE, 1);
         }
 
-        public SickenedCreeper(World world) { super(world); setSize(0.6F, 1.7F); }
+        public SickenedCreeperEntity(World world) { super(world); setSize(0.6F, 1.7F); }
         @Override protected double getSickenedHealth() { return 26.0D; }
         @Override protected double getSickenedSpeed() { return 0.255D; }
         @Override protected double getSickenedFollowRange() { return 18.0D; }
@@ -298,10 +298,10 @@ public final class SickenedEntities {
         }
 
         private static class SickenedCreeperSwellAI extends EntityAIBase {
-            private final SickenedCreeper creeper;
+            private final SickenedCreeperEntity creeper;
             private EntityLivingBase target;
 
-            SickenedCreeperSwellAI(SickenedCreeper creeper) {
+            SickenedCreeperSwellAI(SickenedCreeperEntity creeper) {
                 this.creeper = creeper;
                 setMutexBits(1);
             }
@@ -334,10 +334,10 @@ public final class SickenedEntities {
         }
     }
 
-    public static class SickenedIronGolem extends EntitySickenedMob {
+    public static class SickenedIronGolemEntity extends SickenedMobEntity {
         private int attackAnimationTick;
 
-        public SickenedIronGolem(World world) { super(world); setSize(1.4F, 2.7F); }
+        public SickenedIronGolemEntity(World world) { super(world); setSize(1.4F, 2.7F); }
         @Override protected double getSickenedHealth() { return 60.0D; }
         @Override protected double getSickenedSpeed() { return 0.25D; }
         @Override protected double getSickenedDamage() { return 10.0D; }
@@ -390,8 +390,8 @@ public final class SickenedEntities {
         @Override protected int getInfectedHealAmount() { return 6; }
     }
 
-    public static class SickenedMushroomCow extends EntitySickenedMob {
-        public SickenedMushroomCow(World world) { super(world); setSize(0.9F, 1.4F); }
+    public static class SickenedMushroomCowEntity extends SickenedMobEntity {
+        public SickenedMushroomCowEntity(World world) { super(world); setSize(0.9F, 1.4F); }
         @Override protected double getSickenedHealth() { return 26.0D; }
         @Override protected double getSickenedSpeed() { return 0.3D; }
         @Override protected double getSickenedDamage() { return 2.0D; }
@@ -399,8 +399,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedParrot extends FlyingSickenedMob {
-        public SickenedParrot(World world) { super(world); setSize(0.5F, 0.9F); }
+    public static class SickenedParrotEntity extends FlyingSickenedMob {
+        public SickenedParrotEntity(World world) { super(world); setSize(0.5F, 0.9F); }
         @Override protected double getSickenedHealth() { return 16.0D; }
         @Override protected double getSickenedSpeed() { return 0.4D; }
         @Override protected double getSickenedDamage() { return 2.0D; }
@@ -433,8 +433,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedPhantom extends FlyingSickenedMob {
-        public SickenedPhantom(World world) { super(world); setSize(0.9F, 0.5F); }
+    public static class SickenedPhantomEntity extends FlyingSickenedMob {
+        public SickenedPhantomEntity(World world) { super(world); setSize(0.9F, 0.5F); }
         @Override public String getSickenedType() { return "sickened_phantom"; }
         @Override protected double getSickenedHealth() { return 20.0D; }
         @Override protected double getSickenedSpeed() { return 0.25D; }
@@ -450,8 +450,8 @@ public final class SickenedEntities {
         }
     }
 
-    public static class SickenedPig extends EntitySickenedMob {
-        public SickenedPig(World world) { super(world); setSize(0.9F, 0.9F); }
+    public static class SickenedPigEntity extends SickenedMobEntity {
+        public SickenedPigEntity(World world) { super(world); setSize(0.9F, 0.9F); }
         @Override protected double getSickenedHealth() { return 20.0D; }
         @Override protected double getSickenedSpeed() { return 0.25D; }
         @Override protected double getSickenedDamage() { return 2.0D; }
@@ -462,8 +462,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedPillager extends EntitySickenedMob implements IRangedAttackMob {
-        public SickenedPillager(World world) {
+    public static class SickenedPillagerEntity extends SickenedMobEntity implements IRangedAttackMob {
+        public SickenedPillagerEntity(World world) {
             super(world);
             setSize(0.6F, 1.95F);
             setItemStackToSlot(EntityEquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
@@ -477,7 +477,7 @@ public final class SickenedEntities {
         @Override
         protected void initEntityAI() {
             tasks.addTask(1, new EntityAISwimming(this));
-            tasks.addTask(2, new EntityAIAttackRangedBow<SickenedPillager>(this, 1.0D, 20, 15.0F));
+            tasks.addTask(2, new EntityAIAttackRangedBow<SickenedPillagerEntity>(this, 1.0D, 20, 15.0F));
             tasks.addTask(5, new EntityAIWanderAvoidWater(this, 0.8D));
             tasks.addTask(6, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
             tasks.addTask(6, new EntityAILookIdle(this));
@@ -494,8 +494,8 @@ public final class SickenedEntities {
         @Override public void setSwingingArms(boolean swingingArms) { }
     }
 
-    public static class SickenedSkeleton extends EntitySickenedMob implements IRangedAttackMob {
-        public SickenedSkeleton(World world) {
+    public static class SickenedSkeletonEntity extends SickenedMobEntity implements IRangedAttackMob {
+        public SickenedSkeletonEntity(World world) {
             super(world);
             setSize(0.6F, 1.99F);
             setItemStackToSlot(EntityEquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
@@ -507,7 +507,7 @@ public final class SickenedEntities {
         @Override
         protected void initEntityAI() {
             tasks.addTask(1, new EntityAISwimming(this));
-            tasks.addTask(4, new EntityAIAttackRangedBow<SickenedSkeleton>(this, 1.0D, 20, 15.0F));
+            tasks.addTask(4, new EntityAIAttackRangedBow<SickenedSkeletonEntity>(this, 1.0D, 20, 15.0F));
             tasks.addTask(5, new EntityAIWanderAvoidWater(this, 1.0D));
             tasks.addTask(6, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
             tasks.addTask(6, new EntityAILookIdle(this));
@@ -524,8 +524,8 @@ public final class SickenedEntities {
         @Override public void setSwingingArms(boolean swingingArms) { }
     }
 
-    public static class SickenedSnowGolem extends EntitySickenedMob implements IRangedAttackMob {
-        public SickenedSnowGolem(World world) { super(world); setSize(0.7F, 1.9F); }
+    public static class SickenedSnowGolemEntity extends SickenedMobEntity implements IRangedAttackMob {
+        public SickenedSnowGolemEntity(World world) { super(world); setSize(0.7F, 1.9F); }
         @Override protected double getSickenedHealth() { return 8.0D; }
         @Override protected double getSickenedSpeed() { return 0.24D; }
         @Override public String getSickenedType() { return "sickened_snow_golem"; }
@@ -558,8 +558,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedSpider extends EntitySickenedMob {
-        public SickenedSpider(World world) { super(world); setSize(1.6F, 1.1F); }
+    public static class SickenedSpiderEntity extends SickenedMobEntity {
+        public SickenedSpiderEntity(World world) { super(world); setSize(1.6F, 1.1F); }
         @Override protected double getSickenedHealth() { return 20.0D; }
         @Override protected double getSickenedSpeed() { return 0.34D; }
         @Override protected double getSickenedDamage() { return 3.0D; }
@@ -580,13 +580,13 @@ public final class SickenedEntities {
         }
     }
 
-    public static class SickenedVillager extends SickenedZombie {
-        public SickenedVillager(World world) { super(world); setSize(0.6F, 1.95F); }
+    public static class SickenedVillagerEntity extends SickenedZombieEntity {
+        public SickenedVillagerEntity(World world) { super(world); setSize(0.6F, 1.95F); }
         @Override public String getSickenedType() { return "sickened_villager"; }
     }
 
-    public static class SickenedVindicator extends EntitySickenedMob {
-        public SickenedVindicator(World world) { super(world); setSize(0.6F, 1.95F); }
+    public static class SickenedVindicatorEntity extends SickenedMobEntity {
+        public SickenedVindicatorEntity(World world) { super(world); setSize(0.6F, 1.95F); }
         @Override protected double getSickenedHealth() { return 30.0D; }
         @Override protected double getSickenedSpeed() { return 0.35D; }
         @Override protected double getSickenedDamage() { return 6.0D; }
@@ -594,8 +594,8 @@ public final class SickenedEntities {
         @Override public String getSickenedType() { return "sickened_vindicator"; }
     }
 
-    public static class SickenedWolf extends EntitySickenedMob {
-        public SickenedWolf(World world) { super(world); setSize(0.6F, 0.85F); }
+    public static class SickenedWolfEntity extends SickenedMobEntity {
+        public SickenedWolfEntity(World world) { super(world); setSize(0.6F, 0.85F); }
         @Override protected double getSickenedHealth() { return 18.0D; }
         @Override protected double getSickenedSpeed() { return 0.3D; }
         @Override protected double getSickenedDamage() { return 3.0D; }
@@ -634,8 +634,8 @@ public final class SickenedEntities {
         @Override protected boolean canDespawn() { return false; }
     }
 
-    public static class SickenedZombie extends EntitySickenedMob {
-        public SickenedZombie(World world) { super(world); setSize(0.6F, 1.95F); }
+    public static class SickenedZombieEntity extends SickenedMobEntity {
+        public SickenedZombieEntity(World world) { super(world); setSize(0.6F, 1.95F); }
         @Override protected double getSickenedHealth() { return 24.0D; }
         @Override protected double getSickenedSpeed() { return 0.28D; }
         @Override protected double getSickenedDamage() { return 3.5D; }
@@ -644,19 +644,19 @@ public final class SickenedEntities {
         @Override public String getSickenedType() { return "sickened_zombie"; }
     }
 
-    public static class Tentacle extends EntitySickenedMob {
-        private static final DataParameter<Boolean> DORMANT = EntityDataManager.createKey(Tentacle.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> CURLING = EntityDataManager.createKey(Tentacle.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> CAN_SWING = EntityDataManager.createKey(Tentacle.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> CAN_STRANGLE = EntityDataManager.createKey(Tentacle.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Integer> ANIMATION_OFFSET = EntityDataManager.createKey(Tentacle.class, DataSerializers.VARINT);
-        private static final DataParameter<Float> X_OFFSET = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> Y_OFFSET = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> X_CURL = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> Y_CURL = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> Y_OFFSET_ANIMATION = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> X_CURL_ANIMATION = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
-        private static final DataParameter<Float> Y_CURL_ANIMATION = EntityDataManager.createKey(Tentacle.class, DataSerializers.FLOAT);
+    public static class TentacleEntity extends SickenedMobEntity {
+        private static final DataParameter<Boolean> DORMANT = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> CURLING = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> CAN_SWING = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> CAN_STRANGLE = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Integer> ANIMATION_OFFSET = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.VARINT);
+        private static final DataParameter<Float> X_OFFSET = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> Y_OFFSET = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> X_CURL = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> Y_CURL = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> Y_OFFSET_ANIMATION = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> X_CURL_ANIMATION = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
+        private static final DataParameter<Float> Y_CURL_ANIMATION = EntityDataManager.createKey(TentacleEntity.class, DataSerializers.FLOAT);
         private int awakeTicks;
         private boolean indefinitelyAwake;
         private int swingTicks;
@@ -667,7 +667,7 @@ public final class SickenedEntities {
         private double curlY;
         private double curlZ;
 
-        public Tentacle(World world) { super(world); setSize(7.5F, 9.5F); }
+        public TentacleEntity(World world) { super(world); setSize(7.5F, 9.5F); }
 
         @Override
         protected void initEntityAI() {
@@ -992,9 +992,9 @@ public final class SickenedEntities {
         }
 
         private static final class DormantGoal extends EntityAIBase {
-            private final Tentacle tentacle;
+            private final TentacleEntity tentacle;
 
-            private DormantGoal(Tentacle tentacle) {
+            private DormantGoal(TentacleEntity tentacle) {
                 this.tentacle = tentacle;
                 setMutexBits(7);
             }
@@ -1005,9 +1005,9 @@ public final class SickenedEntities {
         }
 
         private static final class SwingGoal extends EntityAIBase {
-            private final Tentacle tentacle;
+            private final TentacleEntity tentacle;
 
-            private SwingGoal(Tentacle tentacle) { this.tentacle = tentacle; }
+            private SwingGoal(TentacleEntity tentacle) { this.tentacle = tentacle; }
 
             @Override
             public boolean shouldExecute() {
@@ -1033,11 +1033,11 @@ public final class SickenedEntities {
         }
 
         private static final class StrangleGoal extends EntityAIBase {
-            private final Tentacle tentacle;
+            private final TentacleEntity tentacle;
             private int grabWait;
             private int nextStrangle;
 
-            private StrangleGoal(Tentacle tentacle) { this.tentacle = tentacle; }
+            private StrangleGoal(TentacleEntity tentacle) { this.tentacle = tentacle; }
 
             @Override
             public boolean shouldExecute() {
@@ -1083,11 +1083,11 @@ public final class SickenedEntities {
 
         private static final class TentacleTargetGoal<T extends EntityLivingBase>
                 extends EntityAINearestAttackableTarget<T> {
-            private final Tentacle tentacle;
+            private final TentacleEntity tentacle;
 
-            private TentacleTargetGoal(Tentacle tentacle, Class<T> targetClass) {
+            private TentacleTargetGoal(TentacleEntity tentacle, Class<T> targetClass) {
                 super(tentacle, targetClass, 10, true, true,
-                        target -> target != null && !(target instanceof EntitySickenedMob));
+                        target -> target != null && !(target instanceof SickenedMobEntity));
                 this.tentacle = tentacle;
             }
 
@@ -1098,7 +1098,7 @@ public final class SickenedEntities {
 
             @Override
             public void startExecuting() {
-                for (Tentacle other : tentacle.world.getEntitiesWithinAABB(Tentacle.class,
+                for (TentacleEntity other : tentacle.world.getEntitiesWithinAABB(TentacleEntity.class,
                         getTargetableArea(getTargetDistance() + 10.0D))) {
                     if (other != tentacle && other.isEntityAlive() && other.getAttackTarget() == targetEntity) return;
                 }
@@ -1107,15 +1107,15 @@ public final class SickenedEntities {
         }
     }
 
-    public static class WitheredSymbiont extends EntitySickenedMob {
-        private static final DataParameter<Integer> BOSSFIGHT_STAGE = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.VARINT);
-        private static final DataParameter<Integer> SPELL_TYPE = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.VARINT);
-        private static final DataParameter<Boolean> NON_BOSS_MODE = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> RUSH_MODE = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Boolean> SHOULD_NOT_GO_OVER_HALF = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Integer> SPELL_CASTING_TIME = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.VARINT);
-        private static final DataParameter<Boolean> SMASHING = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.BOOLEAN);
-        private static final DataParameter<Integer> ATTACK_DELAY = EntityDataManager.createKey(WitheredSymbiont.class, DataSerializers.VARINT);
+    public static class WitheredSymbiontEntity extends SickenedMobEntity {
+        private static final DataParameter<Integer> BOSSFIGHT_STAGE = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.VARINT);
+        private static final DataParameter<Integer> SPELL_TYPE = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.VARINT);
+        private static final DataParameter<Boolean> NON_BOSS_MODE = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> RUSH_MODE = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Boolean> SHOULD_NOT_GO_OVER_HALF = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Integer> SPELL_CASTING_TIME = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.VARINT);
+        private static final DataParameter<Boolean> SMASHING = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.BOOLEAN);
+        private static final DataParameter<Integer> ATTACK_DELAY = EntityDataManager.createKey(WitheredSymbiontEntity.class, DataSerializers.VARINT);
         private final BossInfoServer bossInfo = new BossInfoServer(getDisplayName(), BossInfo.Color.PURPLE, BossInfo.Overlay.PROGRESS);
         private UUID ownerUuid;
         private List<EntityAIBase> bossFightGoals;
@@ -1124,7 +1124,7 @@ public final class SickenedEntities {
         private UseSpellGoal useSpellGoal;
         private SummonMobsGoal summonMobsGoal;
         private DoNothingGoal doNothingGoal;
-        private LegacySymbiontSpells.Spell spellInstance;
+        private SymbiontSpells.Spell spellInstance;
         private int stageTicks;
         private int nextSpellPickCount;
         private int spellsUsed;
@@ -1139,7 +1139,7 @@ public final class SickenedEntities {
         private boolean healthScaled;
         private boolean attackableWhenNotVulnerable;
 
-        public WitheredSymbiont(World world) {
+        public WitheredSymbiontEntity(World world) {
             super(world);
             setSize(1.2F, 3.8F);
             stepHeight = 1.0F;
@@ -1151,7 +1151,7 @@ public final class SickenedEntities {
         protected void entityInit() {
             super.entityInit();
             dataManager.register(BOSSFIGHT_STAGE, BossfightStage.ATTACKING.ordinal());
-            dataManager.register(SPELL_TYPE, LegacySymbiontSpells.Type.EMPTY.ordinal());
+            dataManager.register(SPELL_TYPE, SymbiontSpells.Type.EMPTY.ordinal());
             dataManager.register(NON_BOSS_MODE, false);
             dataManager.register(RUSH_MODE, false);
             dataManager.register(SHOULD_NOT_GO_OVER_HALF, true);
@@ -1242,7 +1242,7 @@ public final class SickenedEntities {
         }
 
         private void applySpellProtection() {
-            LegacySymbiontSpells.Type spell = getSpell();
+            SymbiontSpells.Type spell = getSpell();
             if (!spell.protectsCaster) return;
             double radius = spell.protectionRadius;
             for (EntityPlayer player : world.getEntitiesWithinAABB(EntityPlayer.class,
@@ -1320,17 +1320,17 @@ public final class SickenedEntities {
         public int getStageTicks() { return stageTicks; }
         public void setStageTicks(int ticks) { stageTicks = Math.max(0, ticks); }
 
-        public LegacySymbiontSpells.Type getSpell() {
-            return LegacySymbiontSpells.Type.byOrdinal(dataManager.get(SPELL_TYPE));
+        public SymbiontSpells.Type getSpell() {
+            return SymbiontSpells.Type.byOrdinal(dataManager.get(SPELL_TYPE));
         }
 
-        public void setSpell(LegacySymbiontSpells.Type spell) {
+        public void setSpell(SymbiontSpells.Type spell) {
             if (spellInstance != null && getSpell() != spell) spellInstance.finish();
             dataManager.set(SPELL_TYPE, spell.ordinal());
-            if (!world.isRemote) spellInstance = LegacySymbiontSpells.create(this, spell);
+            if (!world.isRemote) spellInstance = SymbiontSpells.create(this, spell);
         }
 
-        public boolean hasSpell() { return getSpell() != LegacySymbiontSpells.Type.EMPTY; }
+        public boolean hasSpell() { return getSpell() != SymbiontSpells.Type.EMPTY; }
         public boolean isCastingSpell() { return getSpellCastingTime() > 0; }
         public boolean isSummoningMobs() { return getStage() == BossfightStage.SUMMONING; }
         public boolean isVulnerable() { return getStage() == BossfightStage.VULNERABLE; }
@@ -1373,8 +1373,8 @@ public final class SickenedEntities {
         }
 
         public boolean canPickSpell() { return !hasSpell() || nextSpellPickCount <= 0; }
-        public void setAndCastSpell(LegacySymbiontSpells.Type type) {
-            if (type == LegacySymbiontSpells.Type.EMPTY || isVulnerable()) return;
+        public void setAndCastSpell(SymbiontSpells.Type type) {
+            if (type == SymbiontSpells.Type.EMPTY || isVulnerable()) return;
             nextSpellPickCount = 0;
             setSpell(type);
             useSpellGoal.nextAttackTick = ticksExisted + 1;
@@ -1443,7 +1443,7 @@ public final class SickenedEntities {
             if (difference > 40.0D && difference < 320.0D) return false;
             if (isVulnerable() && getAttackDelay() <= 0) activateAttackDelay();
             if (!isVulnerable() && attacker instanceof EntityLivingBase && !isDead) {
-                new LegacySymbiontSpells.SmashSpell(this, LegacySymbiontSpells.Type.SMASH)
+                new SymbiontSpells.SmashSpell(this, SymbiontSpells.Type.SMASH)
                         .cast((EntityLivingBase) attacker);
             }
             if (source.isExplosion()) amount /= 4.0F;
@@ -1486,10 +1486,10 @@ public final class SickenedEntities {
             double range = getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
             return world.getEntitiesWithinAABB(EntityLivingBase.class, getEntityBoundingBox().grow(range), target ->
                     target != null && target != this && target.isEntityAlive()
-                            && !(target instanceof EntitySickenedMob)
-                            && !(target instanceof EntityWitherStormLegacy)
+                            && !(target instanceof SickenedMobEntity)
+                            && !(target instanceof WitherStormEntity)
                             && !(target instanceof SupplementalEntities.StormPartBase)
-                            && !(target instanceof Tentacle)
+                            && !(target instanceof TentacleEntity)
                             && !(target instanceof EntityEnderman)
                             && !(target instanceof EntityDragon)
                             && !(target instanceof EntityWither)
@@ -1502,10 +1502,10 @@ public final class SickenedEntities {
             double range = getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
             return world.getEntitiesWithinAABB(EntityLivingBase.class, getEntityBoundingBox().grow(range), target ->
                     target != null && target != this && target.isEntityAlive()
-                            && !(target instanceof WitheredSymbiont)
-                            && !(target instanceof EntityWitherStormLegacy)
+                            && !(target instanceof WitheredSymbiontEntity)
+                            && !(target instanceof WitherStormEntity)
                             && !(target instanceof SupplementalEntities.StormPartBase)
-                            && !(target instanceof Tentacle));
+                            && !(target instanceof TentacleEntity));
         }
 
         @Nullable
@@ -1524,7 +1524,7 @@ public final class SickenedEntities {
 
         public void summonSupportMob(boolean illagersOnly) {
             if (world.isRemote) return;
-            EntitySickenedMob mob = createWeightedSupportMob(illagersOnly, shouldIncreaseDifficulty());
+            SickenedMobEntity mob = createWeightedSupportMob(illagersOnly, shouldIncreaseDifficulty());
             if (mob == null) return;
             BlockPos origin = new BlockPos(this);
             BlockPos spawn = null;
@@ -1552,7 +1552,7 @@ public final class SickenedEntities {
         }
 
         @Nullable
-        private EntitySickenedMob createWeightedSupportMob(boolean illagersOnly, boolean difficult) {
+        private SickenedMobEntity createWeightedSupportMob(boolean illagersOnly, boolean difficult) {
             String[] ids;
             int[] weights;
             if (illagersOnly) {
@@ -1576,34 +1576,34 @@ public final class SickenedEntities {
                 selected -= weights[index];
                 if (selected < 0) { id = ids[index]; break; }
             }
-            if ("zombie".equals(id)) return new SickenedZombie(world);
-            if ("villager".equals(id)) return new SickenedVillager(world);
-            if ("skeleton".equals(id)) return new SickenedSkeleton(world);
-            if ("spider".equals(id)) return new SickenedSpider(world);
-            if ("creeper".equals(id)) return new SickenedCreeper(world);
-            if ("snow_golem".equals(id)) return new SickenedSnowGolem(world);
-            if ("chicken".equals(id)) return new SickenedChicken(world);
-            if ("cow".equals(id)) return new SickenedCow(world);
-            if ("mushroom_cow".equals(id)) return new SickenedMushroomCow(world);
-            if ("pig".equals(id)) return new SickenedPig(world);
-            if ("bee".equals(id)) return new SickenedBee(world);
-            if ("parrot".equals(id)) return new SickenedParrot(world);
-            if ("wolf".equals(id)) return new SickenedWolf(world);
-            if ("cat".equals(id)) return new SickenedCat(world);
-            if ("pillager".equals(id)) return new SickenedPillager(world);
-            return new SickenedVindicator(world);
+            if ("zombie".equals(id)) return new SickenedZombieEntity(world);
+            if ("villager".equals(id)) return new SickenedVillagerEntity(world);
+            if ("skeleton".equals(id)) return new SickenedSkeletonEntity(world);
+            if ("spider".equals(id)) return new SickenedSpiderEntity(world);
+            if ("creeper".equals(id)) return new SickenedCreeperEntity(world);
+            if ("snow_golem".equals(id)) return new SickenedSnowGolemEntity(world);
+            if ("chicken".equals(id)) return new SickenedChickenEntity(world);
+            if ("cow".equals(id)) return new SickenedCowEntity(world);
+            if ("mushroom_cow".equals(id)) return new SickenedMushroomCowEntity(world);
+            if ("pig".equals(id)) return new SickenedPigEntity(world);
+            if ("bee".equals(id)) return new SickenedBeeEntity(world);
+            if ("parrot".equals(id)) return new SickenedParrotEntity(world);
+            if ("wolf".equals(id)) return new SickenedWolfEntity(world);
+            if ("cat".equals(id)) return new SickenedCatEntity(world);
+            if ("pillager".equals(id)) return new SickenedPillagerEntity(world);
+            return new SickenedVindicatorEntity(world);
         }
 
-        public void setOwner(@Nullable EntityWitherStormLegacy owner) {
+        public void setOwner(@Nullable WitherStormEntity owner) {
             ownerUuid = owner == null ? null : owner.getUniqueID();
         }
 
         @Nullable
-        public EntityWitherStormLegacy getOwner() {
+        public WitherStormEntity getOwner() {
             if (ownerUuid == null) return null;
             for (Entity entity : world.loadedEntityList) {
-                if (entity instanceof EntityWitherStormLegacy && ownerUuid.equals(entity.getUniqueID())) {
-                    return (EntityWitherStormLegacy) entity;
+                if (entity instanceof WitherStormEntity && ownerUuid.equals(entity.getUniqueID())) {
+                    return (WitherStormEntity) entity;
                 }
             }
             return null;
@@ -1743,14 +1743,14 @@ public final class SickenedEntities {
         public void onDeath(DamageSource cause) {
             super.onDeath(cause);
             if (world.isRemote) return;
-            EntityWitherStormLegacy owner = getOwner();
+            WitherStormEntity owner = getOwner();
             Entity source = cause == null ? null : cause.getTrueSource();
             if (source instanceof EntityPlayer) {
-                LegacySymbiontSummoningManager.markKilledSymbiont((EntityPlayer) source, owner);
+                SymbiontSummoningManager.markKilledSymbiont((EntityPlayer) source, owner);
             }
             for (EntityPlayer player : world.getEntitiesWithinAABB(EntityPlayer.class,
                     getEntityBoundingBox().grow(20.0D))) {
-                LegacySymbiontSummoningManager.markKilledSymbiont(player, owner);
+                SymbiontSummoningManager.markKilledSymbiont(player, owner);
             }
         }
 
@@ -1788,7 +1788,7 @@ public final class SickenedEntities {
             setRushMode(compound.getBoolean("IsRushMode"));
             setStage(BossfightStage.byOrdinal(compound.getInteger("Stage")));
             stageTicks = compound.getInteger("StageTicks");
-            setSpell(LegacySymbiontSpells.Type.byOrdinal(compound.getInteger("Spell")));
+            setSpell(SymbiontSpells.Type.byOrdinal(compound.getInteger("Spell")));
             setSpellCastingTime(compound.getInteger("SpellCastingTicks"));
             nextSpellPickCount = compound.getInteger("NextSpellPick");
             setSmashing(compound.getBoolean("Smashing"));
@@ -1815,25 +1815,25 @@ public final class SickenedEntities {
 
         public enum BossfightStage {
             ATTACKING {
-                @Override boolean shouldMoveToNextStage(WitheredSymbiont entity) {
+                @Override boolean shouldMoveToNextStage(WitheredSymbiontEntity entity) {
                     return entity.getSpellsUsed() > 5 && !entity.isCastingSpell()
                             && entity.getStageTicks() % 80 == 0 && entity.getAttackTarget() != null;
                 }
 
-                @Override void finish(WitheredSymbiont entity) {
+                @Override void finish(WitheredSymbiontEntity entity) {
                     entity.spellsUsed = 0;
-                    entity.setSpell(LegacySymbiontSpells.Type.EMPTY);
+                    entity.setSpell(SymbiontSpells.Type.EMPTY);
                 }
             },
             SUMMONING,
             VULNERABLE {
-                @Override boolean shouldMoveToNextStage(WitheredSymbiont entity) {
+                @Override boolean shouldMoveToNextStage(WitheredSymbiontEntity entity) {
                     return entity.getStageTicks() > 4800;
                 }
             };
 
-            boolean shouldMoveToNextStage(WitheredSymbiont entity) { return false; }
-            void finish(WitheredSymbiont entity) { }
+            boolean shouldMoveToNextStage(WitheredSymbiontEntity entity) { return false; }
+            void finish(WitheredSymbiontEntity entity) { }
             BossfightStage next() { return values()[(ordinal() + 1) % values().length]; }
             static BossfightStage byOrdinal(int value) {
                 return value >= 0 && value < values().length ? values()[value] : ATTACKING;
@@ -1841,8 +1841,8 @@ public final class SickenedEntities {
         }
 
         private static final class SymbiontAttackGoal extends EntityAIAttackMelee {
-            private final WitheredSymbiont entity;
-            private SymbiontAttackGoal(WitheredSymbiont entity) { super(entity, 1.0D, true); this.entity = entity; }
+            private final WitheredSymbiontEntity entity;
+            private SymbiontAttackGoal(WitheredSymbiontEntity entity) { super(entity, 1.0D, true); this.entity = entity; }
             @Override public boolean shouldExecute() {
                 return entity.getStage() == BossfightStage.ATTACKING && !entity.isCastingSpell() && super.shouldExecute();
             }
@@ -1853,8 +1853,8 @@ public final class SickenedEntities {
         }
 
         private static final class PrepareSpellGoal extends EntityAIBase {
-            private final WitheredSymbiont entity;
-            private PrepareSpellGoal(WitheredSymbiont entity) { this.entity = entity; }
+            private final WitheredSymbiontEntity entity;
+            private PrepareSpellGoal(WitheredSymbiontEntity entity) { this.entity = entity; }
             @Override public boolean shouldExecute() {
                 EntityLivingBase target = entity.getAttackTarget();
                 return target != null && target.isEntityAlive() && !entity.isCastingSpell() && entity.canPickSpell();
@@ -1864,9 +1864,9 @@ public final class SickenedEntities {
                 return target != null && target.isEntityAlive() && entity.canPickSpell();
             }
             @Override public void startExecuting() {
-                List<LegacySymbiontSpells.Type> spells = new ArrayList<LegacySymbiontSpells.Type>();
-                for (LegacySymbiontSpells.Type spell : LegacySymbiontSpells.Type.values()) {
-                    if (spell != LegacySymbiontSpells.Type.EMPTY && spell != entity.getSpell()) spells.add(spell);
+                List<SymbiontSpells.Type> spells = new ArrayList<SymbiontSpells.Type>();
+                for (SymbiontSpells.Type spell : SymbiontSpells.Type.values()) {
+                    if (spell != SymbiontSpells.Type.EMPTY && spell != entity.getSpell()) spells.add(spell);
                 }
                 entity.setSpell(spells.get(entity.getRNG().nextInt(spells.size())));
                 entity.useSpellGoal.nextAttackTick = entity.ticksExisted + 40 + entity.getRNG().nextInt(20);
@@ -1880,9 +1880,9 @@ public final class SickenedEntities {
         }
 
         private static final class UseSpellGoal extends EntityAIBase {
-            private final WitheredSymbiont entity;
+            private final WitheredSymbiontEntity entity;
             private int nextAttackTick;
-            private UseSpellGoal(WitheredSymbiont entity) { this.entity = entity; setMutexBits(1); }
+            private UseSpellGoal(WitheredSymbiontEntity entity) { this.entity = entity; setMutexBits(1); }
             @Override public boolean shouldExecute() {
                 EntityLivingBase target = entity.getAttackTarget();
                 return target != null && target.isEntityAlive() && !entity.isCastingSpell()
@@ -1902,15 +1902,15 @@ public final class SickenedEntities {
                 entity.beginSpellCasting();
                 if (entity.getAttackTarget() instanceof EntityPlayer) entity.spellUsed();
             }
-            private static float worldDifficulty(WitheredSymbiont entity) {
+            private static float worldDifficulty(WitheredSymbiontEntity entity) {
                 return entity.world.getDifficultyForLocation(new BlockPos(entity)).getAdditionalDifficulty();
             }
         }
 
         private static final class SummonMobsGoal extends EntityAIBase {
-            private final WitheredSymbiont entity;
+            private final WitheredSymbiontEntity entity;
             private int time;
-            private SummonMobsGoal(WitheredSymbiont entity) { this.entity = entity; setMutexBits(7); }
+            private SummonMobsGoal(WitheredSymbiontEntity entity) { this.entity = entity; setMutexBits(7); }
             @Override public boolean shouldExecute() {
                 EntityLivingBase target = entity.getAttackTarget();
                 return target != null && target.isEntityAlive();
@@ -1927,8 +1927,8 @@ public final class SickenedEntities {
         }
 
         private static final class DoNothingGoal extends EntityAIBase {
-            private final WitheredSymbiont entity;
-            private DoNothingGoal(WitheredSymbiont entity) { this.entity = entity; setMutexBits(7); }
+            private final WitheredSymbiontEntity entity;
+            private DoNothingGoal(WitheredSymbiontEntity entity) { this.entity = entity; setMutexBits(7); }
             @Override public boolean shouldExecute() { return entity.isVulnerable(); }
             @Override public boolean shouldContinueExecuting() { return entity.isVulnerable(); }
             @Override public void updateTask() {
@@ -1938,8 +1938,8 @@ public final class SickenedEntities {
         }
     }
 
-    public static class TaintedSlime extends EntitySlime {
-        public TaintedSlime(World world) {
+    public static class TaintedSlimeEntity extends EntitySlime {
+        public TaintedSlimeEntity(World world) {
             super(world);
         }
     }
@@ -2005,7 +2005,7 @@ public final class SickenedEntities {
         }
     }
 
-    private static void fireSickenedArrow(EntitySickenedMob shooter, EntityLivingBase target, float distanceFactor) {
+    private static void fireSickenedArrow(SickenedMobEntity shooter, EntityLivingBase target, float distanceFactor) {
         EntityTippedArrow arrow = new EntityTippedArrow(shooter.world, shooter);
         double dx = target.posX - shooter.posX;
         double dy = target.getEntityBoundingBox().minY + target.height / 3.0F - arrow.posY;

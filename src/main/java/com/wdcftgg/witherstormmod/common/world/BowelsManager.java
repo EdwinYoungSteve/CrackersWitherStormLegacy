@@ -1,6 +1,6 @@
 package com.wdcftgg.witherstormmod.common.world;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import net.minecraft.block.Block;
@@ -20,7 +20,7 @@ public final class BowelsManager {
     private BowelsManager() {
     }
 
-    public static BowelsInstanceData.Instance enter(EntityWitherStormLegacy storm, EntityPlayerMP player) {
+    public static BowelsInstanceData.Instance enter(WitherStormEntity storm, EntityPlayerMP player) {
         MinecraftServer server = player.getServer();
         if (server == null || storm.isDead) return null;
         WorldServer bowels = server.getWorld(BowelsDimensions.DIMENSION_ID);
@@ -47,12 +47,12 @@ public final class BowelsManager {
     public static void prepareArena(WorldServer world, BowelsInstanceData data, BowelsInstanceData.Instance instance) {
         if (instance.prepared) return;
         BlockPos center = instance.center;
-        LegacyStructureTemplates.placeBowelsNetwork(world, center, world.rand);
+        StructureTemplates.placeBowelsNetwork(world, center, world.rand);
         BlockPos arena = instance.getArenaPosition();
         placeCenteredPodium(world, arena);
         spawnArenaTentacles(world, arena, 6 + world.rand.nextInt(6));
         spawnArenaHeads(world, center);
-        SupplementalEntities.CommandBlockCore core = new SupplementalEntities.CommandBlockCore(world);
+        SupplementalEntities.CommandBlockEntity core = new SupplementalEntities.CommandBlockEntity(world);
         core.setIndependentBowelsPart();
         core.setPosition(arena.getX() + 0.5D, arena.getY(), arena.getZ() + 0.5D);
         core.rotationYaw = core.rotationYawHead = 90.0F;
@@ -62,11 +62,11 @@ public final class BowelsManager {
     }
 
     private static void placeCenteredPodium(WorldServer world, BlockPos center) {
-        Template template = LegacyStructureTemplates.get("bowels_podium");
+        Template template = StructureTemplates.get("bowels_podium");
         if (template == null) return;
-        Rotation rotation = LegacyStructureTemplates.getFeatureRotation(center);
-        BlockPos origin = LegacyStructureTemplates.getTopAnchoredFeatureOrigin(template, center, rotation);
-        LegacyStructureTemplates.place(world, "bowels_podium", origin, rotation, true);
+        Rotation rotation = StructureTemplates.getFeatureRotation(center);
+        BlockPos origin = StructureTemplates.getTopAnchoredFeatureOrigin(template, center, rotation);
+        StructureTemplates.place(world, "bowels_podium", origin, rotation, true);
     }
 
     private static void spawnArenaTentacles(WorldServer world, BlockPos center, int amount) {
@@ -77,14 +77,14 @@ public final class BowelsManager {
                 int z = center.getZ() + world.rand.nextInt(50) - 25;
                 BlockPos candidate = findFloor(world, new BlockPos(x, center.getY() + 8, z), 30);
                 if (candidate == null || Math.sqrt(candidate.distanceSq(center)) <= 10.0D) continue;
-                if (!world.getEntitiesWithinAABB(SickenedEntities.Tentacle.class,
+                if (!world.getEntitiesWithinAABB(SickenedEntities.TentacleEntity.class,
                         new AxisAlignedBB(candidate).grow(10.0D)).isEmpty()) continue;
                 if (!hasVerticalSpace(world, candidate, 8)) continue;
                 spawn = candidate;
                 break;
             }
             if (spawn == null) continue;
-            SickenedEntities.Tentacle tentacle = new SickenedEntities.Tentacle(world);
+            SickenedEntities.TentacleEntity tentacle = new SickenedEntities.TentacleEntity(world);
             tentacle.setPosition(spawn.getX() + 0.5D, spawn.getY() + 1.0D, spawn.getZ() + 0.5D);
             tentacle.rotationYaw = world.rand.nextFloat() * 360.0F;
             tentacle.setDormant(true);
@@ -95,7 +95,7 @@ public final class BowelsManager {
     private static void spawnArenaHeads(WorldServer world, BlockPos structureCenter) {
         BlockPos[] positions = {structureCenter.add(-2, 128, 27), structureCenter.add(-3, 128, -23)};
         for (int index = 0; index < positions.length; index++) {
-            SupplementalEntities.WitherStormHead head = new SupplementalEntities.WitherStormHead(world);
+            SupplementalEntities.WitherStormHeadEntity head = new SupplementalEntities.WitherStormHeadEntity(world);
             head.setIndependentBowelsPart();
             head.setPosition(positions[index].getX() + 0.5D, positions[index].getY(), positions[index].getZ() + 0.5D);
             head.rotationYaw = head.rotationYawHead = index == 0 ? 180.0F : 0.0F;

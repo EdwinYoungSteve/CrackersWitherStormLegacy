@@ -1,10 +1,10 @@
 package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
-import com.wdcftgg.witherstormmod.common.recipe.LegacyAnvilRecipes;
+import com.wdcftgg.witherstormmod.common.recipe.AnvilRecipes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -28,7 +28,7 @@ public final class CommandBlockToolEvents {
     public static void updateAnvil(AnvilUpdateEvent event) {
         ItemStack left = event.getLeft();
         ItemStack right = event.getRight();
-        LegacyAnvilRecipes.Recipe recipe = LegacyAnvilRecipes.find(left, right);
+        AnvilRecipes.Recipe recipe = AnvilRecipes.find(left, right);
         if (recipe == null) return;
 
         event.setOutput(recipe.createOutput(left, right));
@@ -79,11 +79,11 @@ public final class CommandBlockToolEvents {
     }
 
     private static boolean isStormTarget(Entity entity) {
-        return entity instanceof EntityWitherStormLegacy
-                || entity instanceof SickenedEntities.Tentacle
-                || entity instanceof SickenedEntities.WitheredSymbiont
-                || entity instanceof SupplementalEntities.CommandBlockCore
-                || entity instanceof SupplementalEntities.WitherStormHead
-                || entity instanceof SupplementalEntities.WitherStormSegment;
+        return entity instanceof WitherStormEntity
+                || entity instanceof SickenedEntities.TentacleEntity
+                || entity instanceof SickenedEntities.WitheredSymbiontEntity
+                || entity instanceof SupplementalEntities.CommandBlockEntity
+                || entity instanceof SupplementalEntities.WitherStormHeadEntity
+                || entity instanceof SupplementalEntities.WitherStormSegmentEntity;
     }
 }

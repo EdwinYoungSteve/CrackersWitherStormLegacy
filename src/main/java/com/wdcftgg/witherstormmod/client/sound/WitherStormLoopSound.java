@@ -1,6 +1,6 @@
 package com.wdcftgg.witherstormmod.client.sound;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.util.SoundCategory;
@@ -8,9 +8,9 @@ import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.MathHelper;
 
 public class WitherStormLoopSound extends MovingSound {
-    private final EntityWitherStormLegacy storm;
+    private final WitherStormEntity storm;
 
-    public WitherStormLoopSound(EntityWitherStormLegacy storm, SoundEvent sound) {
+    public WitherStormLoopSound(WitherStormEntity storm, SoundEvent sound) {
         super(sound, SoundCategory.HOSTILE);
         this.storm = storm;
         repeat = true;

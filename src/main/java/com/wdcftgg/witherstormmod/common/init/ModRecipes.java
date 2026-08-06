@@ -3,9 +3,9 @@ package com.wdcftgg.witherstormmod.common.init;
 import com.google.gson.JsonObject;
 import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.WitherStormMod;
-import com.wdcftgg.witherstormmod.common.recipe.LegacyAnvilRecipes;
-import com.wdcftgg.witherstormmod.common.recipe.LegacyLockAmuletRecipe;
-import com.wdcftgg.witherstormmod.common.resource.LegacyRecipeResourceConverter;
+import com.wdcftgg.witherstormmod.common.recipe.AnvilRecipes;
+import com.wdcftgg.witherstormmod.common.recipe.LockAmuletRecipe;
+import com.wdcftgg.witherstormmod.common.resource.RecipeResourceConverter;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamResourceArchive;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
@@ -32,7 +32,7 @@ public final class ModRecipes {
     private static final int EXPECTED_LOCK_AMULET_RECIPE_COUNT = 1;
     private static final int EXPECTED_STONECUTTING_RECIPE_COUNT = 13;
     private static final int BREWING_COMBINATION_COUNT = 15;
-    private static final String LOCK_AMULET_ENTRY = LegacyRecipeResourceConverter.RECIPE_PREFIX + "amulet_lock.json";
+    private static final String LOCK_AMULET_ENTRY = RecipeResourceConverter.RECIPE_PREFIX + "amulet_lock.json";
     private static boolean brewingRegistered;
 
     private ModRecipes() {
@@ -45,19 +45,19 @@ public final class ModRecipes {
     }
 
     public static void registerAnvil() {
-        LegacyAnvilRecipes.initialize();
+        AnvilRecipes.initialize();
     }
 
     public static void registerStonecutting() {
         int registered = 0;
         try {
             List<String> entries = UpstreamResourceArchive.listEntries(
-                    LegacyRecipeResourceConverter.RECIPE_PREFIX, ".json");
+                    RecipeResourceConverter.RECIPE_PREFIX, ".json");
             JsonContext context = new JsonContext(Tags.MOD_ID);
             for (String entryName : entries) {
                 JsonObject converted;
                 try (InputStream stream = UpstreamResourceArchive.open(entryName)) {
-                    converted = LegacyRecipeResourceConverter.convertStonecutting(entryName, stream);
+                    converted = RecipeResourceConverter.convertStonecutting(entryName, stream);
                 }
                 if (converted == null) continue;
 
@@ -102,18 +102,18 @@ public final class ModRecipes {
         int lockAmuletRegistered = 0;
         try {
             List<String> entries = UpstreamResourceArchive.listEntries(
-                    LegacyRecipeResourceConverter.RECIPE_PREFIX, ".json");
+                    RecipeResourceConverter.RECIPE_PREFIX, ".json");
             JsonContext context = new JsonContext(Tags.MOD_ID);
             for (String entryName : entries) {
                 if (LOCK_AMULET_ENTRY.equals(entryName)) {
                     boolean lockAmulet;
                     try (InputStream stream = UpstreamResourceArchive.open(entryName)) {
-                        lockAmulet = LegacyRecipeResourceConverter.isLockAmulet(entryName, stream);
+                        lockAmulet = RecipeResourceConverter.isLockAmulet(entryName, stream);
                     }
                     if (!lockAmulet) {
                         throw new IllegalStateException("Expected the external amulet lock recipe at " + entryName);
                     }
-                    LegacyLockAmuletRecipe recipe = new LegacyLockAmuletRecipe();
+                    LockAmuletRecipe recipe = new LockAmuletRecipe();
                     recipe.setRegistryName(new ResourceLocation(Tags.MOD_ID, "amulet_lock"));
                     event.getRegistry().register(recipe);
                     lockAmuletRegistered++;
@@ -122,11 +122,11 @@ public final class ModRecipes {
 
                 JsonObject converted;
                 try (InputStream stream = UpstreamResourceArchive.open(entryName)) {
-                    converted = LegacyRecipeResourceConverter.convert(entryName, stream);
+                    converted = RecipeResourceConverter.convert(entryName, stream);
                 }
                 if (converted == null) continue;
 
-                String recipePath = entryName.substring(LegacyRecipeResourceConverter.RECIPE_PREFIX.length(),
+                String recipePath = entryName.substring(RecipeResourceConverter.RECIPE_PREFIX.length(),
                         entryName.length() - ".json".length());
                 ResourceLocation registryName = new ResourceLocation(Tags.MOD_ID, recipePath);
                 IRecipe recipe = CraftingHelper.getRecipe(converted, context).setRegistryName(registryName);

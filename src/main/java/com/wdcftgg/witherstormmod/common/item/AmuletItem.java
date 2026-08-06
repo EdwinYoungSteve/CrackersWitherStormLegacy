@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.advancement.LegacyCriteriaTriggers;
-import com.wdcftgg.witherstormmod.common.config.LegacyWitherStormConfig;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
@@ -69,12 +69,12 @@ public class AmuletItem extends Item {
 
     @Override
     public boolean hasCustomEntity(ItemStack stack) {
-        return LegacyFireResistantItemEntity.isFireResistant(stack);
+        return FireResistantItemEntity.isFireResistant(stack);
     }
 
     @Override
     public Entity createEntity(World world, Entity location, ItemStack stack) {
-        return hasCustomEntity(stack) ? LegacyFireResistantItemEntity.create(world, location, stack) : null;
+        return hasCustomEntity(stack) ? FireResistantItemEntity.create(world, location, stack) : null;
     }
 
     @Override
@@ -88,7 +88,7 @@ public class AmuletItem extends Item {
 
         for (String tracking : TRACKING) {
             if (TRACKING_BLUE.equals(tracking)) {
-                EntityWitherStormLegacy storm = nearestStorm(serverWorld, player);
+                WitherStormEntity storm = nearestStorm(serverWorld, player);
                 if (storm == null) {
                     tag.setInteger(key(tracking, DISTANCE_SUFFIX), -1);
                 } else {
@@ -120,9 +120,9 @@ public class AmuletItem extends Item {
     public boolean itemInteractionForEntity(ItemStack stack, EntityPlayer player,
                                             EntityLivingBase target, EnumHand hand) {
         if (!(target instanceof EntityLiving || target instanceof EntityPlayer)
-                || target instanceof EntityWitherStormLegacy
-                || target instanceof SupplementalEntities.WitherStormSegment
-                || target instanceof SupplementalEntities.CommandBlockCore
+                || target instanceof WitherStormEntity
+                || target instanceof SupplementalEntities.WitherStormSegmentEntity
+                || target instanceof SupplementalEntities.CommandBlockEntity
                 || player.isSneaking()) {
             return false;
         }
@@ -143,7 +143,7 @@ public class AmuletItem extends Item {
                 tag.setUniqueId(tracking, target.getUniqueID());
                 player.playSound(ModSounds.get("amulet_bind"), 1.0F, 0.0F);
                 if (player instanceof EntityPlayerMP) {
-                    LegacyCriteriaTriggers.LINK_AMULET.trigger((EntityPlayerMP) player, target,
+                    ModCriteriaTriggers.LINK_AMULET.trigger((EntityPlayerMP) player, target,
                             getTotalUniqueLinked(tag));
                 }
             } else {
@@ -174,14 +174,14 @@ public class AmuletItem extends Item {
     }
 
     @Nullable
-    private static EntityWitherStormLegacy nearestStorm(World world, EntityPlayer player) {
-        EntityWitherStormLegacy nearest = null;
+    private static WitherStormEntity nearestStorm(World world, EntityPlayer player) {
+        WitherStormEntity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         for (Entity entity : world.loadedEntityList) {
-            if (!(entity instanceof EntityWitherStormLegacy)) continue;
+            if (!(entity instanceof WitherStormEntity)) continue;
             double distance = player.getDistanceSq(entity);
             if (distance < nearestDistance) {
-                nearest = (EntityWitherStormLegacy) entity;
+                nearest = (WitherStormEntity) entity;
                 nearestDistance = distance;
             }
         }
@@ -224,7 +224,7 @@ public class AmuletItem extends Item {
         super.addInformation(stack, world, tooltip, flag);
         NBTTagCompound tag = getOrCreateTag(stack);
         boolean locked = tag.getBoolean(LOCKED_TAG);
-        if (LegacyWitherStormConfig.amuletOverride) {
+        if (WitherStormConfig.amuletOverride) {
             tooltip.add(TextFormatting.DARK_GRAY + I18n.format("description.amulet.mainUse"));
         }
         tooltip.add(TextFormatting.DARK_GRAY + I18n.format("description.amulet.trackingDesc"));

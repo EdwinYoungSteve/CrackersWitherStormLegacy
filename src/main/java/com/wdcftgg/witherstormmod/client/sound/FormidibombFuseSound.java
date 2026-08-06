@@ -1,6 +1,6 @@
 package com.wdcftgg.witherstormmod.client.sound;
 
-import com.wdcftgg.witherstormmod.common.entity.LegacyFormidibombSource;
+import com.wdcftgg.witherstormmod.common.entity.FormidibombSource;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
@@ -8,9 +8,9 @@ import net.minecraft.util.math.Vec3d;
 
 /** 跟随实体或方块形态 Formidibomb 的上游脉冲循环音。 */
 public class FormidibombFuseSound extends MovingSound {
-    private final LegacyFormidibombSource source;
+    private final FormidibombSource source;
 
-    public FormidibombFuseSound(LegacyFormidibombSource source, SoundEvent sound) {
+    public FormidibombFuseSound(FormidibombSource source, SoundEvent sound) {
         super(sound, SoundCategory.BLOCKS);
         this.source = source;
         repeat = true;

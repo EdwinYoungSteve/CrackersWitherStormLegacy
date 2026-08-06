@@ -1,7 +1,7 @@
 package com.wdcftgg.witherstormmod;
 
-import com.wdcftgg.witherstormmod.common.advancement.LegacyCriteriaTriggers;
-import com.wdcftgg.witherstormmod.common.advancement.LegacyExternalAdvancements;
+import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.advancement.ExternalAdvancements;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModEntities;
 import com.wdcftgg.witherstormmod.common.init.ModEffects;
@@ -10,15 +10,16 @@ import com.wdcftgg.witherstormmod.common.init.ModPotionTypes;
 import com.wdcftgg.witherstormmod.common.init.ModRecipes;
 import com.wdcftgg.witherstormmod.common.init.ModTileEntities;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
-import com.wdcftgg.witherstormmod.common.loot.LegacyLootConditions;
-import com.wdcftgg.witherstormmod.common.loot.LegacyExternalLootTables;
-import com.wdcftgg.witherstormmod.common.network.LegacyNetwork;
+import com.wdcftgg.witherstormmod.common.loot.LootConditions;
+import com.wdcftgg.witherstormmod.common.loot.ExternalLootTables;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import com.wdcftgg.witherstormmod.common.proxy.CommonProxy;
-import com.wdcftgg.witherstormmod.common.gui.LegacyGuiHandler;
+import com.wdcftgg.witherstormmod.common.gui.ModGuiHandler;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamResourceArchive;
-import com.wdcftgg.witherstormmod.common.resource.LegacyUpstreamBlockTags;
+import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
+import com.wdcftgg.witherstormmod.common.resource.UpstreamEntityTags;
 import com.wdcftgg.witherstormmod.common.world.BowelsDimensions;
-import com.wdcftgg.witherstormmod.common.world.LegacyChunkLoadingManager;
+import com.wdcftgg.witherstormmod.common.world.ChunkLoadingManager;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -50,21 +51,22 @@ public class WitherStormMod {
         } catch (java.io.IOException exception) {
             throw new IllegalStateException("Unable to initialize the external Wither Storm resource pack", exception);
         }
-        LegacyUpstreamBlockTags.initialize();
-        LegacyLootConditions.register();
-        LegacyExternalLootTables.initialize();
-        LegacyNetwork.register();
+        UpstreamBlockTags.initialize();
+        UpstreamEntityTags.initialize();
+        LootConditions.register();
+        ExternalLootTables.initialize();
+        ModNetwork.register();
         BowelsDimensions.register();
-        LegacyChunkLoadingManager.INSTANCE.register(this);
+        ChunkLoadingManager.INSTANCE.register(this);
         ModBlocks.bootstrap();
         ModItems.bootstrap();
         ModEffects.bootstrap();
         ModPotionTypes.bootstrap();
         ModSounds.bootstrap();
         ModEntities.register();
-        LegacyCriteriaTriggers.register();
+        ModCriteriaTriggers.register();
         ModTileEntities.register();
-        NetworkRegistry.INSTANCE.registerGuiHandler(this, new LegacyGuiHandler());
+        NetworkRegistry.INSTANCE.registerGuiHandler(this, new ModGuiHandler());
         proxy.preInit(event);
         LOGGER.info("Loaded {} as a 1.12.2 port using upstream resources from {}", Tags.MOD_NAME, UPSTREAM_RESOURCEPACK_NAME);
     }
@@ -81,7 +83,7 @@ public class WitherStormMod {
     @Mod.EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
         try {
-            LegacyExternalAdvancements.install(event.getServer());
+            ExternalAdvancements.install(event.getServer());
         } catch (java.io.IOException exception) {
             throw new IllegalStateException(
                     "Unable to prepare advancements from the external Wither Storm resource pack", exception);

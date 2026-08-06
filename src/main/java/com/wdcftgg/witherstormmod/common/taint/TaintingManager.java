@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.common.taint;
 
 import com.google.common.base.Optional;
-import com.wdcftgg.witherstormmod.common.advancement.LegacyCriteriaTriggers;
-import com.wdcftgg.witherstormmod.common.entity.EntitySickenedMob;
+import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.entity.SickenedMobEntity;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import net.minecraft.block.Block;
@@ -57,10 +57,10 @@ public final class TaintingManager {
     }
 
     public static boolean convertEntity(EntityLivingBase original) {
-        if (original.world.isRemote || original.isDead || original instanceof EntitySickenedMob) {
+        if (original.world.isRemote || original.isDead || original instanceof SickenedMobEntity) {
             return false;
         }
-        EntitySickenedMob replacement = createReplacement(original);
+        SickenedMobEntity replacement = createReplacement(original);
         if (replacement == null) {
             return false;
         }
@@ -82,7 +82,7 @@ public final class TaintingManager {
         return true;
     }
 
-    public static boolean cureEntity(EntitySickenedMob original) {
+    public static boolean cureEntity(SickenedMobEntity original) {
         EntityLivingBase replacement = createCuredReplacement(original);
         if (replacement == null || original.world.isRemote || original.isDead) {
             return false;
@@ -112,7 +112,7 @@ public final class TaintingManager {
             net.minecraft.entity.Entity starter = original.world.getMinecraftServer()
                     .getPlayerList().getPlayerByUUID(original.getConversionStarter());
             if (starter instanceof EntityPlayerMP) {
-                LegacyCriteriaTriggers.CURED_SICKENED_MOB.trigger(
+                ModCriteriaTriggers.CURED_SICKENED_MOB.trigger(
                         (EntityPlayerMP) starter, original, replacement);
             }
         }
@@ -160,28 +160,28 @@ public final class TaintingManager {
         return target;
     }
 
-    private static EntitySickenedMob createReplacement(EntityLivingBase original) {
+    private static SickenedMobEntity createReplacement(EntityLivingBase original) {
         World world = original.world;
-        if (original instanceof EntityMooshroom) return new SickenedEntities.SickenedMushroomCow(world);
-        if (original instanceof EntityCow) return new SickenedEntities.SickenedCow(world);
-        if (original instanceof EntityChicken) return new SickenedEntities.SickenedChicken(world);
-        if (original instanceof EntityPig) return new SickenedEntities.SickenedPig(world);
-        if (original instanceof EntityWolf) return new SickenedEntities.SickenedWolf(world);
-        if (original instanceof EntityOcelot) return new SickenedEntities.SickenedCat(world);
-        if (original instanceof EntityParrot) return new SickenedEntities.SickenedParrot(world);
-        if (original instanceof EntityCreeper) return new SickenedEntities.SickenedCreeper(world);
-        if (original instanceof EntitySkeleton) return new SickenedEntities.SickenedSkeleton(world);
-        if (original instanceof EntitySpider) return new SickenedEntities.SickenedSpider(world);
-        if (original instanceof EntityZombieVillager) return new SickenedEntities.SickenedVillager(world);
-        if (original instanceof EntityZombie) return new SickenedEntities.SickenedZombie(world);
-        if (original instanceof EntityVillager) return new SickenedEntities.SickenedVillager(world);
-        if (original instanceof EntityVindicator) return new SickenedEntities.SickenedVindicator(world);
-        if (original instanceof EntityIronGolem) return new SickenedEntities.SickenedIronGolem(world);
-        if (original instanceof EntitySnowman) return new SickenedEntities.SickenedSnowGolem(world);
+        if (original instanceof EntityMooshroom) return new SickenedEntities.SickenedMushroomCowEntity(world);
+        if (original instanceof EntityCow) return new SickenedEntities.SickenedCowEntity(world);
+        if (original instanceof EntityChicken) return new SickenedEntities.SickenedChickenEntity(world);
+        if (original instanceof EntityPig) return new SickenedEntities.SickenedPigEntity(world);
+        if (original instanceof EntityWolf) return new SickenedEntities.SickenedWolfEntity(world);
+        if (original instanceof EntityOcelot) return new SickenedEntities.SickenedCatEntity(world);
+        if (original instanceof EntityParrot) return new SickenedEntities.SickenedParrotEntity(world);
+        if (original instanceof EntityCreeper) return new SickenedEntities.SickenedCreeperEntity(world);
+        if (original instanceof EntitySkeleton) return new SickenedEntities.SickenedSkeletonEntity(world);
+        if (original instanceof EntitySpider) return new SickenedEntities.SickenedSpiderEntity(world);
+        if (original instanceof EntityZombieVillager) return new SickenedEntities.SickenedVillagerEntity(world);
+        if (original instanceof EntityZombie) return new SickenedEntities.SickenedZombieEntity(world);
+        if (original instanceof EntityVillager) return new SickenedEntities.SickenedVillagerEntity(world);
+        if (original instanceof EntityVindicator) return new SickenedEntities.SickenedVindicatorEntity(world);
+        if (original instanceof EntityIronGolem) return new SickenedEntities.SickenedIronGolemEntity(world);
+        if (original instanceof EntitySnowman) return new SickenedEntities.SickenedSnowGolemEntity(world);
         return null;
     }
 
-    private static EntityLivingBase createCuredReplacement(EntitySickenedMob original) {
+    private static EntityLivingBase createCuredReplacement(SickenedMobEntity original) {
         World world = original.world;
         String type = original.getSickenedType();
         if ("sickened_cat".equals(type)) return new EntityOcelot(world);

@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.common.util;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.config.LegacyWitherStormConfig;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import net.minecraft.block.state.IBlockState;
@@ -33,14 +33,14 @@ public final class PhlegmGravestoneHelper {
     @Nullable
     public static Vec3d findPotentialClusterPosition(EntityLivingBase victim, DamageSource source) {
         if (victim == null || source == null) return null;
-        if (!LegacyWitherStormConfig.preserveDropsForAllMobs && !(victim instanceof EntityPlayer)) return null;
+        if (!WitherStormConfig.preserveDropsForAllMobs && !(victim instanceof EntityPlayer)) return null;
 
-        ItemPreservationCondition condition = LegacyWitherStormConfig.itemPreservation;
+        ItemPreservationCondition condition = WitherStormConfig.itemPreservation;
         if (condition == ItemPreservationCondition.DISABLED) return null;
         Entity sourceEntity = condition.usesDirectEntity() ? source.getImmediateSource() : source.getTrueSource();
-        if (!(sourceEntity instanceof EntityWitherStormLegacy) || sourceEntity.isDead) return null;
+        if (!(sourceEntity instanceof WitherStormEntity) || sourceEntity.isDead) return null;
 
-        EntityWitherStormLegacy storm = (EntityWitherStormLegacy) sourceEntity;
+        WitherStormEntity storm = (WitherStormEntity) sourceEntity;
         Vec3d victimEyes = victim.getPositionEyes(1.0F);
         Vec3d closest = null;
         double closestDistance = -1.0D;
@@ -57,7 +57,7 @@ public final class PhlegmGravestoneHelper {
     }
 
     @Nullable
-    public static SupplementalEntities.BlockCluster spawnForEntity(EntityLivingBase victim, Vec3d position,
+    public static SupplementalEntities.BlockClusterEntity spawnForEntity(EntityLivingBase victim, Vec3d position,
                                                                     List<ItemStack> drops, int experience) {
         if (victim == null || position == null || drops == null || drops.isEmpty() || victim.world.isRemote) {
             return null;
@@ -66,7 +66,7 @@ public final class PhlegmGravestoneHelper {
         ClusterData data = buildClusterData(random, drops, victim.getDisplayName().getFormattedText(), experience);
         if (data.blocks.isEmpty()) return null;
 
-        SupplementalEntities.BlockCluster cluster = new SupplementalEntities.BlockCluster(victim.world);
+        SupplementalEntities.BlockClusterEntity cluster = new SupplementalEntities.BlockClusterEntity(victim.world);
         cluster.setBlocks(data.blocks);
         for (NBTTagCompound tile : data.tileData) cluster.addTileData(tile);
         cluster.setPosition(position.x, position.y, position.z);

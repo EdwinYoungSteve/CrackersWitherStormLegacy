@@ -1,6 +1,6 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -16,7 +16,7 @@ import net.minecraft.world.World;
 public class FormidiBladeItem extends ItemSword {
 
     public FormidiBladeItem(String name) {
-        super(LegacyToolMaterials.FORMIDI_BLADE);
+        super(ModToolMaterials.FORMIDI_BLADE);
         setRegistryName(name);
         setTranslationKey(name);
         setCreativeTab(ModCreativeTabs.MAIN);
@@ -57,7 +57,7 @@ public class FormidiBladeItem extends ItemSword {
         if (stack.hasTagCompound() && stack.getSubCompound("WitherStormMod") != null
                 && stack.getSubCompound("WitherStormMod").getBoolean("Charged")) {
             if (!attacker.world.isRemote) {
-                float explosionStrength = target instanceof EntityWitherStormLegacy ? 8.0F : 4.0F;
+                float explosionStrength = target instanceof WitherStormEntity ? 8.0F : 4.0F;
                 attacker.world.newExplosion(attacker, target.posX, target.posY + target.height * 0.5D, target.posZ,
                         explosionStrength, false, false);
             }

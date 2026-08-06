@@ -4,9 +4,9 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.entity.player.EntityPlayer;
-import com.wdcftgg.witherstormmod.common.tile.TileEntityWitheredPhlegm;
-import com.wdcftgg.witherstormmod.common.tile.TileEntityAbstractSuperBeacon;
-import com.wdcftgg.witherstormmod.common.network.LegacyNetwork;
+import com.wdcftgg.witherstormmod.common.tile.WitheredPhlegmTileEntity;
+import com.wdcftgg.witherstormmod.common.tile.AbstractSuperBeaconTileEntity;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
@@ -42,14 +42,14 @@ public class CommonProxy {
     public void handleSuperBeaconParticles(BlockPos pos, int type) {
     }
 
-    public Object createWitheredPhlegmGui(EntityPlayer player, TileEntityWitheredPhlegm tile) {
+    public Object createWitheredPhlegmGui(EntityPlayer player, WitheredPhlegmTileEntity tile) {
         return null;
     }
 
-    public Object createSuperBeaconGui(EntityPlayer player, TileEntityAbstractSuperBeacon tile) {
+    public Object createSuperBeaconGui(EntityPlayer player, AbstractSuperBeaconTileEntity tile) {
         return null;
     }
 
-    public void handleDistantSuperBeacon(LegacyNetwork.DistantSuperBeaconMessage message) {
+    public void handleDistantSuperBeacon(ModNetwork.DistantSuperBeaconMessage message) {
     }
 }

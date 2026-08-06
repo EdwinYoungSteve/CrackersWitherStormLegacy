@@ -3,7 +3,7 @@ package com.wdcftgg.witherstormmod.common.item;
 import net.minecraft.item.EnumRarity;
 import net.minecraft.item.ItemStack;
 
-public class WitheredNetherStarItem extends LegacyItem {
+public class WitheredNetherStarItem extends SimpleItem {
     public WitheredNetherStarItem(String name) {
         super(name, EnumRarity.EPIC);
     }

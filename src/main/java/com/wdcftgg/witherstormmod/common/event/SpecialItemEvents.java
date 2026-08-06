@@ -2,7 +2,7 @@ package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
-import com.wdcftgg.witherstormmod.common.taint.LegacyWitherSicknessCure;
+import com.wdcftgg.witherstormmod.common.taint.WitherSicknessCure;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.EntityEnderman;
 import net.minecraft.entity.player.EntityPlayer;
@@ -31,6 +31,6 @@ public final class SpecialItemEvents {
 
     @SubscribeEvent
     public static void updateWitherSicknessCure(LivingEvent.LivingUpdateEvent event) {
-        LegacyWitherSicknessCure.tick(event.getEntityLiving());
+        WitherSicknessCure.tick(event.getEntityLiving());
     }
 }

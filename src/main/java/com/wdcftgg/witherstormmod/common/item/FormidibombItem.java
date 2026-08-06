@@ -1,7 +1,7 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.entity.EntityPowerfulExplosive;
-import com.wdcftgg.witherstormmod.common.tile.TileEntityFormidibomb;
+import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
+import com.wdcftgg.witherstormmod.common.tile.FormidibombTileEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
@@ -17,7 +17,7 @@ import net.minecraft.init.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-public class FormidibombItem extends LegacyRarityBlockItem {
+public class FormidibombItem extends RarityBlockItem {
     private static final int DEFAULT_FUSE = 12000;
     private static final int DROP_THRESHOLD = DEFAULT_FUSE / 4;
 
@@ -57,7 +57,7 @@ public class FormidibombItem extends LegacyRarityBlockItem {
 
     private void spawnBomb(ItemStack stack, World world, Entity holder, BlockPos position, int fuse) {
         EntityLivingBase owner = holder instanceof EntityLivingBase ? (EntityLivingBase) holder : null;
-        EntityPowerfulExplosive.Formidibomb bomb = new EntityPowerfulExplosive.Formidibomb(world,
+        PowerfulExplosiveEntity.FormidibombEntity bomb = new PowerfulExplosiveEntity.FormidibombEntity(world,
                 position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D, owner);
         bomb.setFuse(fuse);
         bomb.setStartFuse(getStartFuse(stack));
@@ -74,9 +74,9 @@ public class FormidibombItem extends LegacyRarityBlockItem {
                                 IBlockState newState) {
         if (!super.placeBlockAt(stack, player, world, pos, side, hitX, hitY, hitZ, newState)) return false;
         TileEntity tile = world.getTileEntity(pos);
-        if (tile instanceof TileEntityFormidibomb) {
+        if (tile instanceof FormidibombTileEntity) {
             ensureFuse(stack);
-            ((TileEntityFormidibomb) tile).setFuse(getFuse(stack), getStartFuse(stack), player);
+            ((FormidibombTileEntity) tile).setFuse(getFuse(stack), getStartFuse(stack), player);
         }
         return true;
     }

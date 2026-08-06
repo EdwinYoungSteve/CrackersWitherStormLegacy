@@ -13,7 +13,7 @@ public final class BowelsDimensions {
     public static void register() {
         if (BOWELS == null) {
             BOWELS = DimensionType.register("wither_storm_bowels", "_wither_storm_bowels", DIMENSION_ID,
-                    WorldProviderBowels.class, false);
+                    BowelsWorldProvider.class, false);
         }
         if (!DimensionManager.isDimensionRegistered(DIMENSION_ID)) {
             DimensionManager.registerDimension(DIMENSION_ID, BOWELS);

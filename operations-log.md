@@ -72,3 +72,11 @@
 - Preserved the upstream stair-specific resistance even though 1.12 `BlockStairs` delegates explosion resistance to its model block.
 - Added `LegacyRegisteredBlockPropertiesTest` covering 53 total tests across the full suite, including modern strength/resistance and light-level assertions for the registered block families.
 - Verification: focused block-property tests, full `test` (53 passed), `jar`, and `remapJar` succeeded with Java 25, `--no-daemon`, and `--max-workers=1`. No client, server, or game task was launched.
+
+## 2026-08-06 - Production type naming cleanup
+
+- Standardized production type names by responsibility and Java convention, including blocks, entities, renderers, models, screens, containers, tile entities, and migration support code.
+- Removed migration-only `Legacy` and `Port` suffixes from production type filenames while preserving registry names, resource identifiers, persisted NBT keys, and display metadata.
+- Intentionally retained the concise internal names `StormPartBase`, `FlyingSickenedMob`, and the existing `...AI` classes; these names already describe their 1.12 roles and should not be mechanically changed to `StormPartEntity`, `FlyingSickenedMobEntity`, or `...Goal`.
+- Confirmed `src/test` remains absent as requested.
+- Verification: `compileJava`, `jar`, and the `remapJar` invoked by `jar` succeeded with Java 25, `--no-daemon`, and `--max-workers=1`. No test, client, server, or game task was launched.

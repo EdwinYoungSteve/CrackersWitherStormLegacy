@@ -8,14 +8,15 @@ import com.wdcftgg.witherstormmod.client.sound.WitherStormLoopSound;
 import com.wdcftgg.witherstormmod.client.sound.WitherStormTrembleSound;
 import com.wdcftgg.witherstormmod.client.sound.BowelsLoopSound;
 import com.wdcftgg.witherstormmod.client.sound.FormidibombFuseSound;
-import com.wdcftgg.witherstormmod.client.particle.LegacyCommandBlockParticle;
-import com.wdcftgg.witherstormmod.client.particle.LegacyPhlegmParticle;
-import com.wdcftgg.witherstormmod.client.render.RenderSuperBeacon;
-import com.wdcftgg.witherstormmod.common.entity.EntityPowerfulExplosive;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
-import com.wdcftgg.witherstormmod.common.entity.LegacyFormidibombSource;
+import com.wdcftgg.witherstormmod.client.particle.CommandBlockParticle;
+import com.wdcftgg.witherstormmod.client.particle.PhlegmBlockParticle;
+import com.wdcftgg.witherstormmod.client.render.SuperBeaconRenderer;
+import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
+import com.wdcftgg.witherstormmod.common.entity.FormidibombSource;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
-import com.wdcftgg.witherstormmod.common.tile.TileEntityFormidibomb;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
+import com.wdcftgg.witherstormmod.common.tile.FormidibombTileEntity;
 import com.wdcftgg.witherstormmod.common.world.BowelsDimensions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
@@ -25,6 +26,8 @@ import net.minecraft.client.renderer.block.model.IBakedModel;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -43,6 +46,8 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderSpecificHandEvent;
 import net.minecraftforge.client.event.ModelRegistryEvent;
 import net.minecraftforge.client.event.TextureStitchEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -64,8 +69,8 @@ public final class WitherStormClientEvents {
     private static String loopName;
     private static final Map<Integer, WitherStormTrembleSound> TREMBLE_LOOPS =
             new HashMap<Integer, WitherStormTrembleSound>();
-    private static final Map<LegacyFormidibombSource, FormidibombFuseSound> FORMIDIBOMB_LOOPS =
-            new IdentityHashMap<LegacyFormidibombSource, FormidibombFuseSound>();
+    private static final Map<FormidibombSource, FormidibombFuseSound> FORMIDIBOMB_LOOPS =
+            new IdentityHashMap<FormidibombSource, FormidibombFuseSound>();
     private static BowelsLoopSound bowelsLoop;
     private static int bowelsMoodDelay;
     private static boolean creativeStackModelsAudited;
@@ -82,9 +87,9 @@ public final class WitherStormClientEvents {
 
     @SubscribeEvent
     public static void registerParticleSprites(TextureStitchEvent.Pre event) {
-        LegacyCommandBlockParticle.registerSprites(event.getMap());
-        LegacyPhlegmParticle.registerSprite(event.getMap());
-        RenderSuperBeacon.registerSprites(event.getMap());
+        CommandBlockParticle.registerSprites(event.getMap());
+        PhlegmBlockParticle.registerSprite(event.getMap());
+        SuperBeaconRenderer.registerSprites(event.getMap());
     }
 
     @SubscribeEvent
@@ -101,14 +106,14 @@ public final class WitherStormClientEvents {
             List<String> missingTextures = findMissingQuadTextures(model);
             if (model == null || model == missing || !missingTextures.isEmpty()) {
                 failed++;
-                WitherStormMod.LOGGER.error("Legacy item model audit failed: item={}, model={}, baked={}, missingTextures={}",
+                WitherStormMod.LOGGER.error("Item model audit failed: item={}, model={}, baked={}, missingTextures={}",
                         registryName, location, model == null ? "null" : model.getClass().getName(), missingTextures);
             }
         }
         if (failed == 0) {
-            WitherStormMod.LOGGER.info("Legacy item model audit passed for all {} registered items", checked);
+            WitherStormMod.LOGGER.info("Item model audit passed for all {} registered items", checked);
         } else {
-            WitherStormMod.LOGGER.error("Legacy item model audit found {} failures among {} registered items", failed, checked);
+            WitherStormMod.LOGGER.error("Item model audit found {} failures among {} registered items", failed, checked);
         }
     }
 
@@ -136,11 +141,11 @@ public final class WitherStormClientEvents {
     public static void clientTick(TickEvent.ClientTickEvent event) {
         Minecraft minecraft = Minecraft.getMinecraft();
         if (event.phase == TickEvent.Phase.START) {
-            LegacyClientEffects.tick(minecraft);
+            ClientEffects.tick(minecraft);
             return;
         }
         if (event.phase != TickEvent.Phase.END) return;
-        LegacyAmuletAnimation.tick(minecraft);
+        AmuletAnimationHelper.tick(minecraft);
         if (!creativeStackModelsAudited) {
             auditCreativeStackModels(minecraft);
             creativeStackModelsAudited = true;
@@ -166,14 +171,14 @@ public final class WitherStormClientEvents {
         updateFormidibombLoops(minecraft);
         spawnFormidibombParticles(minecraft);
         updateWitherStormTrembleLoops(minecraft);
-        EntityWitherStormLegacy nearest = null;
+        WitherStormEntity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         for (Entity entity : minecraft.world.loadedEntityList) {
-            if (entity instanceof EntityWitherStormLegacy && !entity.isDead) {
+            if (entity instanceof WitherStormEntity && !entity.isDead) {
                 double distance = minecraft.player.getDistanceSq(entity);
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
-                    nearest = (EntityWitherStormLegacy) entity;
+                    nearest = (WitherStormEntity) entity;
                 }
             }
         }
@@ -198,14 +203,43 @@ public final class WitherStormClientEvents {
     }
 
     @SubscribeEvent
+    public static void leftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
+        checkForHeadHit(event.getEntityPlayer());
+    }
+
+    @SubscribeEvent
+    public static void attackEntity(AttackEntityEvent event) {
+        checkForHeadHit(event.getEntityPlayer());
+    }
+
+    private static void checkForHeadHit(EntityPlayer player) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (player == null || player != minecraft.player || player.world == null
+                || !player.world.isRemote || player.isSpectator() || minecraft.playerController == null) return;
+        double reach = minecraft.playerController.getBlockReachDistance();
+        for (WitherStormEntity storm : player.world.getEntitiesWithinAABB(
+                WitherStormEntity.class, player.getEntityBoundingBox().grow(50.0D))) {
+            for (int head = 0; head < storm.getTotalHeads(); head++) {
+                if (!storm.tractorBeamActive(head) || !storm.canPlayerReachHead(player, head, reach)) continue;
+                if (!storm.isDeadOrPlayingDead() && !storm.isHeadInjured(head)) {
+                    ModNetwork.injureWitherStormHead(storm, head);
+                } else {
+                    player.playSound(SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE, 1.0F, 1.0F);
+                }
+                return;
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void renderAmuletInHand(RenderSpecificHandEvent event) {
-        LegacyAmuletAnimation.render(event);
+        AmuletAnimationHelper.render(event);
     }
 
     private static void spawnFormidibombParticles(Minecraft minecraft) {
         for (Entity entity : minecraft.world.loadedEntityList) {
-            if (entity instanceof EntityPowerfulExplosive.Formidibomb && !entity.isDead) {
-                LegacyCommandBlockParticle.spawnForBomb((EntityPowerfulExplosive.Formidibomb) entity);
+            if (entity instanceof PowerfulExplosiveEntity.FormidibombEntity && !entity.isDead) {
+                CommandBlockParticle.spawnForBomb((PowerfulExplosiveEntity.FormidibombEntity) entity);
             }
         }
     }
@@ -214,12 +248,12 @@ public final class WitherStormClientEvents {
         Set<Integer> loadedStormIds = new HashSet<Integer>();
         SoundEvent trembleSound = ModSounds.get("wither_storm_tremble");
         for (Entity entity : minecraft.world.loadedEntityList) {
-            if (!(entity instanceof EntityWitherStormLegacy) || entity.isDead) continue;
-            EntityWitherStormLegacy storm = (EntityWitherStormLegacy) entity;
+            if (!(entity instanceof WitherStormEntity) || entity.isDead) continue;
+            WitherStormEntity storm = (WitherStormEntity) entity;
             int entityId = storm.getEntityId();
             loadedStormIds.add(entityId);
             WitherStormTrembleSound trembleLoop = TREMBLE_LOOPS.get(entityId);
-            if (storm.getPlayDeadState() == EntityWitherStormLegacy.PlayDeadState.FALLING) {
+            if (storm.getPlayDeadState() == WitherStormEntity.PlayDeadState.FALLING) {
                 if ((trembleLoop == null || trembleLoop.isDonePlaying()) && trembleSound != null) {
                     trembleLoop = new WitherStormTrembleSound(storm, trembleSound);
                     TREMBLE_LOOPS.put(entityId, trembleLoop);
@@ -244,23 +278,23 @@ public final class WitherStormClientEvents {
     }
 
     private static void updateFormidibombLoops(Minecraft minecraft) {
-        Set<LegacyFormidibombSource> currentSources = java.util.Collections.newSetFromMap(
-                new IdentityHashMap<LegacyFormidibombSource, Boolean>());
+        Set<FormidibombSource> currentSources = java.util.Collections.newSetFromMap(
+                new IdentityHashMap<FormidibombSource, Boolean>());
         for (Entity entity : minecraft.world.loadedEntityList) {
-            if (entity instanceof EntityPowerfulExplosive.Formidibomb && !entity.isDead) {
-                currentSources.add((EntityPowerfulExplosive.Formidibomb) entity);
+            if (entity instanceof PowerfulExplosiveEntity.FormidibombEntity && !entity.isDead) {
+                currentSources.add((PowerfulExplosiveEntity.FormidibombEntity) entity);
             }
         }
         for (TileEntity tile : minecraft.world.loadedTileEntityList) {
-            if (tile instanceof TileEntityFormidibomb
+            if (tile instanceof FormidibombTileEntity
                     && minecraft.player.getEntityBoundingBox().grow(50.0D).contains(
                     new net.minecraft.util.math.Vec3d(tile.getPos()).add(0.5D, 0.5D, 0.5D))) {
-                currentSources.add((TileEntityFormidibomb) tile);
+                currentSources.add((FormidibombTileEntity) tile);
             }
         }
 
         SoundEvent pulseSound = ModSounds.get("formidibomb_pulse_loop");
-        for (LegacyFormidibombSource source : currentSources) {
+        for (FormidibombSource source : currentSources) {
             FormidibombFuseSound loop = FORMIDIBOMB_LOOPS.get(source);
             if ((loop == null || loop.isDonePlaying()) && pulseSound != null) {
                 loop = new FormidibombFuseSound(source, pulseSound);
@@ -269,10 +303,10 @@ public final class WitherStormClientEvents {
             }
         }
 
-        Iterator<Map.Entry<LegacyFormidibombSource, FormidibombFuseSound>> iterator =
+        Iterator<Map.Entry<FormidibombSource, FormidibombFuseSound>> iterator =
                 FORMIDIBOMB_LOOPS.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<LegacyFormidibombSource, FormidibombFuseSound> entry = iterator.next();
+            Map.Entry<FormidibombSource, FormidibombFuseSound> entry = iterator.next();
             if (!currentSources.contains(entry.getKey()) || !entry.getKey().isFormidibombAlive()
                     || entry.getValue().isDonePlaying()) {
                 entry.getValue().stop();
@@ -286,23 +320,23 @@ public final class WitherStormClientEvents {
         Minecraft minecraft = Minecraft.getMinecraft();
         if (minecraft.player == null || event.getEntity() != minecraft.player) return;
         float partialTicks = (float) event.getRenderPartialTicks();
-        GlStateManager.translate(LegacyClientEffects.getShakeTranslationX(partialTicks),
-                LegacyClientEffects.getShakeTranslationY(partialTicks), 0.0F);
+        GlStateManager.translate(ClientEffects.getShakeTranslationX(partialTicks),
+                ClientEffects.getShakeTranslationY(partialTicks), 0.0F);
     }
 
     @SubscribeEvent
     public static void modifyPhasometerFov(EntityViewRenderEvent.FOVModifier event) {
         if (event.getEntity() instanceof net.minecraft.entity.player.EntityPlayer
-                && LegacyPhasometerOverlay.isScoping(
+                && PhasometerOverlay.isScoping(
                 (net.minecraft.entity.player.EntityPlayer) event.getEntity())) {
-            event.setFOV(LegacyPhasometerOverlay.applyScopeFov(event.getFOV()));
+            event.setFOV(PhasometerOverlay.applyScopeFov(event.getFOV()));
         }
     }
 
     @SubscribeEvent
     public static void renderBlindOverlay(RenderGameOverlayEvent.Pre event) {
         if (event.getType() != RenderGameOverlayEvent.ElementType.HOTBAR) return;
-        float fade = LegacyClientEffects.getBlindFade(event.getPartialTicks());
+        float fade = ClientEffects.getBlindFade(event.getPartialTicks());
         if (fade <= 0.0F) return;
         int alpha = MathHelper.clamp(Math.round(fade * 255.0F), 0, 255);
         Gui.drawRect(0, 0, event.getResolution().getScaledWidth(), event.getResolution().getScaledHeight(),
@@ -312,7 +346,7 @@ public final class WitherStormClientEvents {
     @SubscribeEvent
     public static void renderPhasometerOverlay(RenderGameOverlayEvent.Pre event) {
         if (event.getType() == RenderGameOverlayEvent.ElementType.HELMET) {
-            LegacyPhasometerOverlay.render(Minecraft.getMinecraft(), event.getResolution());
+            PhasometerOverlay.render(Minecraft.getMinecraft(), event.getResolution());
         }
     }
 
@@ -361,16 +395,16 @@ public final class WitherStormClientEvents {
                 if (model == null || model == missing || !missingTextures.isEmpty()) {
                     failed++;
                     WitherStormMod.LOGGER.error(
-                            "Legacy creative stack model audit failed: item={}, metadata={}, baked={}, missingTextures={}",
+                            "Creative stack model audit failed: item={}, metadata={}, baked={}, missingTextures={}",
                             registryName, stack.getMetadata(), model == null ? "null" : model.getClass().getName(),
                             missingTextures);
                 }
             }
         }
         if (failed == 0) {
-            WitherStormMod.LOGGER.info("Legacy creative stack model audit passed for all {} item stacks", checked);
+            WitherStormMod.LOGGER.info("Creative stack model audit passed for all {} item stacks", checked);
         } else {
-            WitherStormMod.LOGGER.error("Legacy creative stack model audit found {} failures among {} item stacks",
+            WitherStormMod.LOGGER.error("Creative stack model audit found {} failures among {} item stacks",
                     failed, checked);
         }
     }

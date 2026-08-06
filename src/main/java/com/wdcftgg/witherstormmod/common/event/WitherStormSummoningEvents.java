@@ -1,7 +1,7 @@
 package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
@@ -63,7 +63,7 @@ public final class WitherStormSummoningEvents {
         for (BlockPos position : structure) {
             world.setBlockToAir(position);
         }
-        EntityWitherStormLegacy storm = new EntityWitherStormLegacy(world);
+        WitherStormEntity storm = new WitherStormEntity(world);
         storm.setLocationAndAngles(centerSkull.getX() + 0.5D, centerSkull.getY() - 1.0D, centerSkull.getZ() + 0.5D,
                 axis == EnumFacing.Axis.X ? 0.0F : 90.0F, 0.0F);
         storm.ignite();

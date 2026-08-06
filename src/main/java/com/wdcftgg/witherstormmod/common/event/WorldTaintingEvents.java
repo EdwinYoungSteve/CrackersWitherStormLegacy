@@ -1,8 +1,8 @@
 package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
-import com.wdcftgg.witherstormmod.common.entity.EntitySickenedMob;
-import com.wdcftgg.witherstormmod.common.entity.EntityWitherStormLegacy;
+import com.wdcftgg.witherstormmod.common.entity.SickenedMobEntity;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.init.ModEffects;
 import com.wdcftgg.witherstormmod.common.taint.TaintingManager;
 import net.minecraft.entity.Entity;
@@ -28,18 +28,18 @@ public final class WorldTaintingEvents {
         if (event.phase != TickEvent.Phase.END || event.world.isRemote || event.world.getTotalWorldTime() % 10L != 0L) {
             return;
         }
-        List<EntityWitherStormLegacy> storms = new ArrayList<EntityWitherStormLegacy>();
+        List<WitherStormEntity> storms = new ArrayList<WitherStormEntity>();
         for (Entity entity : event.world.loadedEntityList) {
-            if (entity instanceof EntityWitherStormLegacy && !entity.isDead) {
-                storms.add((EntityWitherStormLegacy) entity);
+            if (entity instanceof WitherStormEntity && !entity.isDead) {
+                storms.add((WitherStormEntity) entity);
             }
         }
-        for (EntityWitherStormLegacy storm : storms) {
+        for (WitherStormEntity storm : storms) {
             taintAroundStorm(storm);
         }
     }
 
-    private static void taintAroundStorm(EntityWitherStormLegacy storm) {
+    private static void taintAroundStorm(WitherStormEntity storm) {
         int phase = storm.getPhase();
         int radius = 12 + phase * 8;
         int attempts = 12 + phase * 10;
@@ -57,7 +57,7 @@ public final class WorldTaintingEvents {
         }
         AxisAlignedBB sicknessArea = storm.getEntityBoundingBox().grow(radius * 1.5D, radius, radius * 1.5D);
         List<EntityLivingBase> livingEntities = storm.world.getEntitiesWithinAABB(EntityLivingBase.class, sicknessArea,
-                entity -> entity != storm && !(entity instanceof EntitySickenedMob));
+                entity -> entity != storm && !(entity instanceof SickenedMobEntity));
         for (EntityLivingBase entity : livingEntities) {
             entity.addPotionEffect(new PotionEffect(ModEffects.WITHER_SICKNESS, 240, Math.min(2, phase / 3), false, true));
         }
