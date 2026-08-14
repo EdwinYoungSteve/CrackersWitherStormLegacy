@@ -3,6 +3,7 @@ package com.wdcftgg.witherstormmod.client.model;
 import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 
@@ -58,6 +59,11 @@ public class WitherStormHeadModel extends ModelBase {
 
     @Override
     public void render(Entity entity, float limbSwing, float amount, float age, float yaw, float pitch, float scale) {
+        // 上游 WitherStormHeadModel 的几何经 HeadModel.scale(3.0) 缩放，位于渲染器
+        // scale(2) 与 -1.501 平移之后。1.12 prepareScale 已在 preRenderCallback 之后
+        // 内置 -1.501，因此在旋转前补上模型级 3.0 即可复现上游视觉位置；若把 3.0
+        // 合并进渲染器缩放，平移会被错误放大，模型整体抬高约 6 格并穿入墙内。
+        GlStateManager.scale(3.0F, 3.0F, 3.0F);
         head.rotateAngleY = (180.0F + yaw) * 0.017453292F;
         head.rotateAngleX = -pitch * 0.017453292F;
         head.rotateAngleZ = 0.0F;
