@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.entity.layers.LayerRenderer;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.opengl.GL11;
 
 /** Emissive eyes layer matching the upstream normal, hurt and inactive textures. */
 public final class WitherStormHeadEyesLayer implements LayerRenderer<SupplementalEntities.WitherStormHeadEntity> {
@@ -28,13 +29,17 @@ public final class WitherStormHeadEyesLayer implements LayerRenderer<Supplementa
         renderer.bindTexture(texture);
         float previousBrightnessX = OpenGlHelper.lastBrightnessX;
         float previousBrightnessY = OpenGlHelper.lastBrightnessY;
+        int previousDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
         if (additive) {
+            // 上游 RenderType.eyes：additive 叠加、只写颜色、双面且深度测试为 EQUAL，
+            // 眼睛像素严格贴在主模型已写入深度的表面，不会浮在模型前后。
             GlStateManager.enableBlend();
             GlStateManager.disableAlpha();
             GlStateManager.disableCull();
             GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE,
                     GlStateManager.DestFactor.ONE);
             GlStateManager.depthMask(false);
+            GlStateManager.depthFunc(GL11.GL_EQUAL);
         } else {
             GlStateManager.disableBlend();
             GlStateManager.enableAlpha();
@@ -48,6 +53,7 @@ public final class WitherStormHeadEyesLayer implements LayerRenderer<Supplementa
             model.setLivingAnimations(entity, limbSwing, limbSwingAmount, partialTicks);
             model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch, scale);
         } finally {
+            GlStateManager.depthFunc(previousDepthFunc);
             OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
                     previousBrightnessX, previousBrightnessY);
             GlStateManager.depthMask(true);

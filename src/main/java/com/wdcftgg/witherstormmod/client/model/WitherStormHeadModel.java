@@ -59,10 +59,12 @@ public class WitherStormHeadModel extends ModelBase {
 
     @Override
     public void render(Entity entity, float limbSwing, float amount, float age, float yaw, float pitch, float scale) {
-        // 上游 WitherStormHeadModel 的几何经 HeadModel.scale(3.0) 缩放，位于渲染器
-        // scale(2) 与 -1.501 平移之后。1.12 prepareScale 已在 preRenderCallback 之后
-        // 内置 -1.501，因此在旋转前补上模型级 3.0 即可复现上游视觉位置；若把 3.0
-        // 合并进渲染器缩放，平移会被错误放大，模型整体抬高约 6 格并穿入墙内。
+        // 上游 WitherStormHeadModel.m_7695_ 在 pushPose 后应用 HeadModel.scale(3.0)
+        // 再 popPose：模型级 3.0 位于渲染器 scale(2) 与 -1.501 平移之后，且不污染
+        // 后续 layer（发光眼层）。1.12 prepareScale 已内置 -1.501，因此这里在旋转前
+        // 包一层矩阵应用 3.0；若把 3.0 合并进渲染器缩放，平移会被错误放大使模型
+        // 抬高约 6 格；若不用 push/pop，矩阵残留会让发光眼层再放大 3 倍并过曝。
+        GlStateManager.pushMatrix();
         GlStateManager.scale(3.0F, 3.0F, 3.0F);
         head.rotateAngleY = (180.0F + yaw) * 0.017453292F;
         head.rotateAngleX = -pitch * 0.017453292F;
@@ -81,5 +83,6 @@ public class WitherStormHeadModel extends ModelBase {
             lowerJaw.rotateAngleX = 0.2F + (MathHelper.sin(age * 0.12F) + 1.0F) * 0.18F;
         }
         head.render(scale);
+        GlStateManager.popMatrix();
     }
 }
