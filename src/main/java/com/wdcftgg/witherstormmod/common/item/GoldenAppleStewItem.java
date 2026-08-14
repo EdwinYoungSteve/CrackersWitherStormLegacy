@@ -55,7 +55,7 @@ public class GoldenAppleStewItem extends ItemSoup {
         if (target instanceof SickenedMobEntity) {
             SickenedMobEntity sickened = (SickenedMobEntity) target;
             if (sickened.isConverting() || sickened.getOriginalType() == null) {
-                return false;
+                return true;
             }
             if (!target.world.isRemote) {
                 sickened.startConverting(player.getUniqueID(), 3600 + player.getRNG().nextInt(2401));
@@ -65,7 +65,8 @@ public class GoldenAppleStewItem extends ItemSoup {
         }
 
         if (!WitherSicknessCure.isInfected(target)
-                || WitherSicknessCure.isBeingCured(target)) {
+                || WitherSicknessCure.isBeingCured(target)
+                || WitherSicknessCure.isActuallyImmune(target)) {
             return false;
         }
         if (!target.world.isRemote && WitherSicknessCure.beginCure(target)) {

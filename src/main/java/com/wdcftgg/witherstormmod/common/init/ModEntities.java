@@ -5,18 +5,21 @@ import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
+import com.wdcftgg.witherstormmod.common.entity.SymbiontDragonFireballEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 
 public final class ModEntities {
+    private static final int DISTANT_STORM_TRACKING_RANGE = Integer.MAX_VALUE;
 
     private ModEntities() {
     }
 
     public static void register() {
         int entityId = 1;
-        registerLiving("wither_storm", WitherStormEntity.class, entityId++, 0x21162C, 0x7F3FBA, 512);
+        registerLiving("wither_storm", WitherStormEntity.class, entityId++, 0x21162C, 0x7F3FBA,
+                DISTANT_STORM_TRACKING_RANGE, 1);
         registerLiving("sickened_bee", SickenedEntities.SickenedBeeEntity.class, entityId++, 0xD6B34A, 0x6D2A83, 80);
         registerLiving("sickened_cat", SickenedEntities.SickenedCatEntity.class, entityId++, 0x795548, 0xB22AFF, 80);
         registerLiving("sickened_chicken", SickenedEntities.SickenedChickenEntity.class, entityId++, 0xD8D8D8, 0x6D2A83, 80);
@@ -36,26 +39,44 @@ public final class ModEntities {
         registerLiving("sickened_wolf", SickenedEntities.SickenedWolfEntity.class, entityId++, 0xA9A9A9, 0x6D2A83, 80);
         registerLiving("sickened_zombie", SickenedEntities.SickenedZombieEntity.class, entityId++, 0x507A4A, 0xA12AFF, 80);
         registerLiving("tentacle", SickenedEntities.TentacleEntity.class, entityId++, 0x201323, 0x913CC4, 160);
-        registerLiving("withered_symbiont", SickenedEntities.WitheredSymbiontEntity.class, entityId++, 0x251A2A, 0xD053FF, 160);
+        // Match the upstream entity tracker cadence (10 ticks). Spell state,
+        // boss-stage changes and long-range boss bars are synchronized through
+        // explicit data/network updates rather than a 2-tick tracker spam.
+        registerLiving("withered_symbiont", SickenedEntities.WitheredSymbiontEntity.class, entityId++,
+                0x251A2A, 0xD053FF, 160, 10);
         registerLiving("tainted_slime", SickenedEntities.TaintedSlimeEntity.class, entityId++, 0x34203B, 0xA64DCF, 80);
         registerProjectile("super_tnt", PowerfulExplosiveEntity.SuperTntEntity.class, entityId++);
         registerProjectile("formidibomb", PowerfulExplosiveEntity.FormidibombEntity.class, entityId++);
         registerProjectile("flaming_wither_skull", SupplementalEntities.FlamingWitherSkullEntity.class, entityId++);
         registerProjectile("blue_flaming_wither_skull", SupplementalEntities.BlueFlamingWitherSkullEntity.class, entityId++);
         registerProjectile("tentacle_spike", SupplementalEntities.TentacleSpikeEntity.class, entityId++);
-        registerProjectile("block_cluster", SupplementalEntities.BlockClusterEntity.class, entityId++);
+        registerProjectile("block_cluster", SupplementalEntities.BlockClusterEntity.class, entityId++, 1);
         registerLiving("command_block", SupplementalEntities.CommandBlockEntity.class, entityId++, 0xBA6B33, 0x232323, 160);
-        registerLiving("wither_storm_head", SupplementalEntities.WitherStormHeadEntity.class, entityId++, 0x21162C, 0x7F3FBA, 256);
-        registerLiving("wither_storm_segment", SupplementalEntities.WitherStormSegmentEntity.class, entityId, 0x21162C, 0x4C285B, 256);
+        registerLiving("wither_storm_head", SupplementalEntities.WitherStormHeadEntity.class, entityId++,
+                0x21162C, 0x7F3FBA, DISTANT_STORM_TRACKING_RANGE, 1);
+        registerLiving("wither_storm_segment", SupplementalEntities.WitherStormSegmentEntity.class, entityId,
+                0x21162C, 0x4C285B, DISTANT_STORM_TRACKING_RANGE, 1);
+        registerProjectile("symbiont_dragon_fireball", SymbiontDragonFireballEntity.class, entityId + 1);
     }
 
     private static void registerLiving(String name, Class<? extends Entity> entityClass, int entityId, int primaryColor, int secondaryColor, int trackingRange) {
+        registerLiving(name, entityClass, entityId, primaryColor, secondaryColor, trackingRange, 2);
+    }
+
+    private static void registerLiving(String name, Class<? extends Entity> entityClass, int entityId,
+                                       int primaryColor, int secondaryColor, int trackingRange,
+                                       int updateFrequency) {
         EntityRegistry.registerModEntity(new ResourceLocation(Tags.MOD_ID, name), entityClass, name, entityId,
-                Tags.MOD_ID, trackingRange, 2, true, primaryColor, secondaryColor);
+                Tags.MOD_ID, trackingRange, updateFrequency, true, primaryColor, secondaryColor);
     }
 
     private static void registerProjectile(String name, Class<? extends Entity> entityClass, int entityId) {
+        registerProjectile(name, entityClass, entityId, 10);
+    }
+
+    private static void registerProjectile(String name, Class<? extends Entity> entityClass, int entityId,
+                                           int updateFrequency) {
         EntityRegistry.registerModEntity(new ResourceLocation(Tags.MOD_ID, name), entityClass, name, entityId,
-                Tags.MOD_ID, 160, 10, true);
+                Tags.MOD_ID, 160, updateFrequency, true);
     }
 }

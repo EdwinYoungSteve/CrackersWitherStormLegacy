@@ -8,8 +8,10 @@ import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
 import java.util.Set;
 
 public class SuperSupportBeaconTileEntity extends AbstractSuperBeaconTileEntity implements ITickable {
@@ -20,41 +22,45 @@ public class SuperSupportBeaconTileEntity extends AbstractSuperBeaconTileEntity 
     @Override
     public void update() {
         if (world == null) return;
+        tickBeaconBase();
         if (!world.isRemote) {
             SuperBeaconTileEntity.SupportColor detected = detectColor();
             if (detected != color) {
                 color = detected;
-                if (effect != null && !getValidEffects().contains(effect)) effect = null;
                 markAndNotify();
             }
 
             SuperBeaconTileEntity main = findNearbyValidBeacon();
-            BlockPos newConnection = main == null ? null : main.getPos().toImmutable();
-            if (newConnection == null ? connectedBeacon != null : !newConnection.equals(connectedBeacon)) {
-                connectedBeacon = newConnection;
-                markAndNotify();
+            if (main != null) {
+                BlockPos newConnection = main.getPos().toImmutable();
+                if (!newConnection.equals(connectedBeacon)) {
+                    connectedBeacon = newConnection;
+                    markAndNotify();
+                }
             }
             boolean shouldBeActive = color != null && main != null;
             if (active != shouldBeActive) setActive(shouldBeActive);
-            int previousLevel = beaconLevel;
-            boolean previousShowWorkingArea = showWorkingArea;
-            if (main != null) {
-                beaconLevel = main.getBeaconLevel();
-                showWorkingArea = main.showWorkingArea();
-                if (color != null && main.getResummonTicks() == getResummonThreshold()) {
-                    playSound("withered_beacon_activate", 1.0F, 1.0F);
-                    playSound("tremble", 10.0F, 1.0F);
-                    BlockPos mainPos = main.getPos();
-                    com.wdcftgg.witherstormmod.common.network.ModNetwork.shakeNear(world,
-                            mainPos.getX() + 0.5D, mainPos.getY() + 0.5D, mainPos.getZ() + 0.5D,
-                            20.0D, 80.0F, 10.0F);
-                }
-            } else {
-                beaconLevel = 0;
-            }
-            if (beaconLevel != previousLevel || showWorkingArea != previousShowWorkingArea) markAndNotify();
         }
-        tickBeaconBase();
+
+        SuperBeaconTileEntity main = getConnectedBeaconEntity();
+        if (main == null) return;
+        int previousLevel = beaconLevel;
+        boolean previousShowWorkingArea = showWorkingArea;
+        beaconLevel = main.getBeaconLevel();
+        showWorkingArea = main.showWorkingArea();
+        if (!world.isRemote && color != null
+                && main.getResummonTicks() == getResummonThreshold()) {
+            playSound("withered_beacon_activate", 1.0F, 1.0F);
+            playSound("tremble", 10.0F, 1.0F);
+            BlockPos mainPos = main.getPos();
+            com.wdcftgg.witherstormmod.common.network.ModNetwork.shakeNear(world,
+                    mainPos.getX(), mainPos.getY(), mainPos.getZ(),
+                    20.0D, 80.0F, 10.0F);
+        }
+        if (!world.isRemote
+                && (beaconLevel != previousLevel || showWorkingArea != previousShowWorkingArea)) {
+            markAndNotify();
+        }
     }
 
     private SuperBeaconTileEntity.SupportColor detectColor() {
@@ -68,23 +74,16 @@ public class SuperSupportBeaconTileEntity extends AbstractSuperBeaconTileEntity 
     }
 
     private SuperBeaconTileEntity findNearbyValidBeacon() {
-        SuperBeaconTileEntity nearest = null;
-        double nearestDistance = Double.MAX_VALUE;
         int distance = SuperBeaconLogic.SUPPORT_SCAN_DISTANCE;
-        for (BlockPos check : BlockPos.getAllInBox(pos.add(-distance, -distance, -distance),
-                pos.add(distance, distance, distance))) {
-            if (check.distanceSq(pos) > distance * distance) continue;
-            TileEntity tile = world.getTileEntity(check);
+        AxisAlignedBB searchBox = new AxisAlignedBB(pos).grow(distance);
+        for (TileEntity tile : new ArrayList<TileEntity>(world.loadedTileEntityList)) {
             if (!(tile instanceof SuperBeaconTileEntity)) continue;
             SuperBeaconTileEntity beacon = (SuperBeaconTileEntity) tile;
+            if (!searchBox.intersects(new AxisAlignedBB(beacon.getPos()))) continue;
             if (!beacon.isConnected(pos)) continue;
-            double squaredDistance = check.distanceSq(pos);
-            if (squaredDistance < nearestDistance) {
-                nearest = beacon;
-                nearestDistance = squaredDistance;
-            }
+            return beacon;
         }
-        return nearest;
+        return null;
     }
 
     @Override
@@ -94,8 +93,8 @@ public class SuperSupportBeaconTileEntity extends AbstractSuperBeaconTileEntity 
         int amplifier = Math.max(0, beaconLevel - 1);
         for (EntityPlayer player : world.playerEntities) {
             if (SuperBeaconLogic.isInsideSupportArc(
-                    main.getPos().getX() + 0.5D, main.getPos().getZ() + 0.5D,
-                    pos.getX() + 0.5D, pos.getZ() + 0.5D,
+                    main.getPos().getX(), main.getPos().getZ(),
+                    pos.getX(), pos.getZ(),
                     player.posX, player.posZ)) {
                 player.addPotionEffect(new PotionEffect(effect,
                         SuperBeaconLogic.SUPPORT_EFFECT_DURATION, amplifier, true, true));
@@ -158,7 +157,8 @@ public class SuperSupportBeaconTileEntity extends AbstractSuperBeaconTileEntity 
 
     @Override
     public String getNameForGui() {
-        return "container.witherstormmod.withered_support_beacon";
+        return customName == null || customName.isEmpty()
+                ? "container.witherstormmod.withered_support_beacon" : customName;
     }
 
     @Override

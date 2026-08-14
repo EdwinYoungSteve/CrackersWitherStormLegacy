@@ -38,14 +38,20 @@ public final class PhlegmGravestoneHelper {
         ItemPreservationCondition condition = WitherStormConfig.itemPreservation;
         if (condition == ItemPreservationCondition.DISABLED) return null;
         Entity sourceEntity = condition.usesDirectEntity() ? source.getImmediateSource() : source.getTrueSource();
-        if (!(sourceEntity instanceof WitherStormEntity) || sourceEntity.isDead) return null;
+        boolean mainStorm = sourceEntity instanceof WitherStormEntity;
+        boolean segment = sourceEntity instanceof SupplementalEntities.WitherStormSegmentEntity;
+        if (!mainStorm && !segment || !((EntityLivingBase) sourceEntity).isEntityAlive()) return null;
 
-        WitherStormEntity storm = (WitherStormEntity) sourceEntity;
         Vec3d victimEyes = victim.getPositionEyes(1.0F);
         Vec3d closest = null;
         double closestDistance = -1.0D;
-        for (int head = 0; head < storm.getTotalHeads(); head++) {
-            Vec3d headPosition = storm.getHeadPosition(head, 1.0F);
+        int totalHeads = mainStorm ? ((WitherStormEntity) sourceEntity).getTotalHeads()
+                : ((SupplementalEntities.WitherStormSegmentEntity) sourceEntity).getTotalHeads();
+        for (int head = 0; head < totalHeads; head++) {
+            Vec3d headPosition = mainStorm
+                    ? ((WitherStormEntity) sourceEntity).getHeadPosition(head, 1.0F)
+                    : ((SupplementalEntities.WitherStormSegmentEntity) sourceEntity)
+                    .getSegmentHeadPosition(head);
             double distance = headPosition.distanceTo(victimEyes);
             if ((closestDistance < 0.0D || distance < closestDistance) && distance < 30.0D) {
                 closestDistance = distance;

@@ -24,8 +24,11 @@ public class ModGuiHandler implements IGuiHandler {
         if (id == WITHERED_PHLEGM && tile instanceof WitheredPhlegmTileEntity) {
             return new WitheredPhlegmContainer(player.inventory, (WitheredPhlegmTileEntity) tile);
         }
-        return id == SUPER_BEACON && tile instanceof AbstractSuperBeaconTileEntity
-                ? new SuperBeaconContainer((AbstractSuperBeaconTileEntity) tile) : null;
+        if (id == SUPER_BEACON && tile instanceof AbstractSuperBeaconTileEntity) {
+            AbstractSuperBeaconTileEntity beacon = (AbstractSuperBeaconTileEntity) tile;
+            return beacon.canPlayerUseItems(player) ? new SuperBeaconContainer(beacon) : null;
+        }
+        return null;
     }
 
     @Nullable

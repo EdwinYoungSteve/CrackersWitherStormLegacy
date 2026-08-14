@@ -43,27 +43,34 @@ public final class SuperBeaconRecipes {
         try {
             for (String entryName : UpstreamResourceArchive.listEntries(
                     RecipeResourceConverter.RECIPE_PREFIX, ".json")) {
-                JsonObject json;
-                try (InputStream stream = UpstreamResourceArchive.open(entryName);
-                     InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-                    json = JsonParser.parseReader(reader).getAsJsonObject();
-                }
-                String type = json.get("type").getAsString();
-                if (!"witherstormmod:item_craft_super_beacon".equals(type)
-                        && !"witherstormmod:resummon_super_beacon".equals(type)) {
-                    continue;
-                }
-                List<Ingredient> ingredients = new ArrayList<Ingredient>();
-                for (JsonElement ingredientElement : json.getAsJsonArray("ingredients")) {
-                    ingredients.add(CraftingHelper.getIngredient(
-                            RecipeResourceConverter.convertIngredient(ingredientElement), context));
-                }
-                String condition = json.has("condition") ? json.get("condition").getAsString() : "none";
-                if ("witherstormmod:resummon_super_beacon".equals(type)) {
-                    recipes.add(new Recipe(condition, ingredients, ItemStack.EMPTY, json.get("entity").getAsString(),
-                            json.has("nbt") ? json.get("nbt").getAsString() : ""));
-                } else {
-                    recipes.add(new Recipe(condition, ingredients, convertResult(json, context), null, ""));
+                try {
+                    JsonObject json;
+                    try (InputStream stream = UpstreamResourceArchive.open(entryName);
+                         InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                        json = JsonParser.parseReader(reader).getAsJsonObject();
+                    }
+                    String type = json.get("type").getAsString();
+                    if (!"witherstormmod:item_craft_super_beacon".equals(type)
+                            && !"witherstormmod:resummon_super_beacon".equals(type)) {
+                        continue;
+                    }
+                    List<Ingredient> ingredients = new ArrayList<Ingredient>();
+                    for (JsonElement ingredientElement : json.getAsJsonArray("ingredients")) {
+                        ingredients.add(CraftingHelper.getIngredient(
+                                RecipeResourceConverter.convertIngredient(ingredientElement), context));
+                    }
+                    String condition = json.has("condition") ? json.get("condition").getAsString() : "none";
+                    if ("witherstormmod:resummon_super_beacon".equals(type)) {
+                        recipes.add(new Recipe(condition, ingredients, ItemStack.EMPTY,
+                                json.get("entity").getAsString(),
+                                json.has("nbt") ? json.get("nbt").getAsString() : ""));
+                    } else {
+                        recipes.add(new Recipe(condition, ingredients, convertResult(json, context), null, ""));
+                    }
+                } catch (Exception recipeException) {
+                    // 单个配方解析失败不应拖垮全部超级信标配方/JEI 分类
+                    WitherStormMod.LOGGER.warn("Skipping external super beacon recipe {}: {}",
+                            entryName, recipeException.toString());
                 }
             }
         } catch (Exception exception) {
@@ -98,6 +105,10 @@ public final class SuperBeaconRecipes {
         return RECIPES;
     }
 
+    public static List<Recipe> getRecipes() {
+        return RECIPES;
+    }
+
     public interface ConditionTester {
         boolean test(String condition);
     }
@@ -123,6 +134,14 @@ public final class SuperBeaconRecipes {
         }
 
         public ItemStack createResult() {
+            return result.copy();
+        }
+
+        public List<Ingredient> getIngredients() {
+            return ingredients;
+        }
+
+        public ItemStack getResult() {
             return result.copy();
         }
 

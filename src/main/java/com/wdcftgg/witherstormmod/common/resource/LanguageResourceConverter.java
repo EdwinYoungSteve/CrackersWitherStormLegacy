@@ -58,6 +58,9 @@ final class LanguageResourceConverter {
             } else if (key.startsWith("block.witherstormmod.")) {
                 legacyKey = "tile." + key.substring("block.witherstormmod.".length()) + ".name";
             } else if (key.startsWith("entity.witherstormmod.")) {
+                String entityName = key.substring("entity.witherstormmod.".length());
+                converted.put("entity." + entityName + ".name", entry.getValue().getAsString());
+                // Retain the namespaced alias for integrations which query the registry key directly.
                 legacyKey = key + ".name";
             } else if (key.startsWith("effect.witherstormmod.")) {
                 legacyKey = "potion." + key.substring("effect.witherstormmod.".length());

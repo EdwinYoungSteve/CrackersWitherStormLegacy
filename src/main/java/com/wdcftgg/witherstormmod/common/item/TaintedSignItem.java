@@ -37,7 +37,10 @@ public class TaintedSignItem extends Item {
         }
         BlockPos placePos = replaceable ? pos : pos.offset(facing);
         ItemStack stack = player.getHeldItem(hand);
-        if (!player.canPlayerEdit(placePos, facing, stack)) return EnumActionResult.FAIL;
+        if (!player.canPlayerEdit(placePos, facing, stack)
+                || !ModBlocks.get("tainted_sign").canPlaceBlockAt(world, placePos)) {
+            return EnumActionResult.FAIL;
+        }
         if (world.isRemote) return EnumActionResult.SUCCESS;
 
         if (facing == EnumFacing.UP) {

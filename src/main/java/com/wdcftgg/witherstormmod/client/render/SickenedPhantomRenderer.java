@@ -14,6 +14,8 @@ public class SickenedPhantomRenderer extends SickenedMobRenderer<SickenedEntitie
 
     @Override
     protected void preRenderCallback(SickenedEntities.SickenedPhantomEntity entity, float partialTickTime) {
+        float scale = 1.0F + 0.15F * entity.getPhantomSize();
+        GlStateManager.scale(scale, scale, scale);
         GlStateManager.translate(0.0F, 1.3125F, 0.1875F);
     }
 

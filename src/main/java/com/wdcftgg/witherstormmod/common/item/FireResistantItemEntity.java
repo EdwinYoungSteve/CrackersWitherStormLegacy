@@ -33,6 +33,7 @@ public class FireResistantItemEntity extends EntityItem {
         return "amulet".equals(name)
                 || "command_block_book".equals(name)
                 || "withered_nether_star".equals(name)
+                || "eye_of_the_storm".equals(name)
                 || "formidibomb".equals(name)
                 || "super_beacon".equals(name)
                 || "super_support_beacon".equals(name)
@@ -56,6 +57,22 @@ public class FireResistantItemEntity extends EntityItem {
 
     @Override
     public boolean attackEntityFrom(DamageSource source, float amount) {
-        return source.isFireDamage() ? false : super.attackEntityFrom(source, amount);
+        ItemStack stack = getItem();
+        if (isInvulnerableExceptToBypassDamage(stack)) {
+            return source.canHarmInCreative() && super.attackEntityFrom(source, amount);
+        }
+        return !source.isFireDamage() && super.attackEntityFrom(source, amount);
+    }
+
+    private static boolean isInvulnerableExceptToBypassDamage(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        Item item = stack.getItem();
+        if (item instanceof CommandBlockSwordItem
+                || item instanceof CommandBlockPickaxeItem
+                || item instanceof CommandBlockAxeItem
+                || item instanceof CommandBlockShovelItem
+                || item instanceof CommandBlockHoeItem) return true;
+        ResourceLocation name = item.getRegistryName();
+        return name != null && "withered_nether_star".equals(name.getPath());
     }
 }

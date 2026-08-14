@@ -26,6 +26,7 @@ public class SickenedMobRenderer<T extends SickenedMobEntity> extends RenderLivi
         this.scaleX = scaleX;
         this.scaleY = scaleY;
         this.scaleZ = scaleZ;
+        addLayer(new AbsorptionLayer(model));
         if (texturePath.startsWith("textures/entity/sickened/") && texturePath.endsWith(".png")) {
             String emissivePath = texturePath.substring(0, texturePath.length() - 4) + "_emissive.png";
             addLayer(new SickenedEmissiveLayer<T>(this, new ResourceLocation(Tags.MOD_ID, emissivePath)));
@@ -40,5 +41,28 @@ public class SickenedMobRenderer<T extends SickenedMobEntity> extends RenderLivi
     @Override
     protected void preRenderCallback(T entity, float partialTickTime) {
         GlStateManager.scale(scaleX, scaleY, scaleZ);
+    }
+
+    @Override
+    protected void applyRotations(T entity, float ageInTicks, float rotationYaw,
+                                  float partialTicks) {
+        if (entity.isConverting() && shakesWhileConverting(entity.getSickenedType())) {
+            rotationYaw += (float) (Math.cos((entity.ticksExisted + partialTicks) * 3.25D)
+                    * Math.PI * 0.4D);
+        }
+        super.applyRotations(entity, ageInTicks, rotationYaw, partialTicks);
+    }
+
+    private static boolean shakesWhileConverting(String type) {
+        return "sickened_bee".equals(type)
+                || "sickened_cat".equals(type)
+                || "sickened_parrot".equals(type)
+                || "sickened_creeper".equals(type)
+                || "sickened_skeleton".equals(type)
+                || "sickened_spider".equals(type)
+                || "sickened_villager".equals(type)
+                || "sickened_vindicator".equals(type)
+                || "sickened_wolf".equals(type)
+                || "sickened_zombie".equals(type);
     }
 }

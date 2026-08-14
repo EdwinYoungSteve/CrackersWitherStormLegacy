@@ -25,7 +25,7 @@ public final class WitheredSymbiontTearLayer implements LayerRenderer<SickenedEn
         float previousBrightnessY = OpenGlHelper.lastBrightnessY;
         GlStateManager.enableBlend();
         GlStateManager.disableAlpha();
-        GlStateManager.enableCull();
+        GlStateManager.disableCull();
         GlStateManager.depthMask(false);
         GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
@@ -43,6 +43,9 @@ public final class WitheredSymbiontTearLayer implements LayerRenderer<SickenedEn
             GlStateManager.depthMask(true);
             GlStateManager.disableBlend();
             GlStateManager.enableAlpha();
+            GlStateManager.enableCull();
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }

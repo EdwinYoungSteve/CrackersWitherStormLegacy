@@ -10,7 +10,7 @@ import net.minecraft.world.World;
 public class CommandBlockAxeItem extends ItemAxe {
 
     public CommandBlockAxeItem(String name, ToolMaterial material, float attackDamage, float attackSpeed) {
-        super(material, attackDamage, attackSpeed);
+        super(material, attackDamage + material.getAttackDamage(), attackSpeed);
         setRegistryName(name);
         setTranslationKey(name);
         setCreativeTab(ModCreativeTabs.MAIN);
@@ -19,6 +19,11 @@ public class CommandBlockAxeItem extends ItemAxe {
     @Override
     public EnumRarity getRarity(ItemStack stack) {
         return EnumRarity.EPIC;
+    }
+
+    @Override
+    public boolean isEnchantable(ItemStack stack) {
+        return getItemStackLimit(stack) == 1;
     }
 
     @Override

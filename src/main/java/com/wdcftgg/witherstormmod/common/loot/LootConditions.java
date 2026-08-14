@@ -1,5 +1,7 @@
 package com.wdcftgg.witherstormmod.common.loot;
 
+import com.wdcftgg.witherstormmod.Tags;
+import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSerializationContext;
@@ -31,13 +33,14 @@ public final class LootConditions {
         @Override
         public boolean testCondition(Random random, LootContext context) {
             Entity killer = context.getKiller();
-            return killer instanceof AbstractSkeleton;
+            return killer instanceof AbstractSkeleton
+                    || killer instanceof SickenedEntities.SickenedSkeletonEntity;
         }
 
         public static final class Serializer extends LootCondition.Serializer<SkeletonKiller> {
 
             public Serializer() {
-                super(new ResourceLocation("witherstormmod", "skeleton_killer"), SkeletonKiller.class);
+                super(new ResourceLocation(Tags.MOD_ID, "skeleton_killer"), SkeletonKiller.class);
             }
 
             @Override

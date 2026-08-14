@@ -9,6 +9,8 @@ import com.wdcftgg.witherstormmod.common.block.FireworkBundleBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedTorchBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedStandingSignBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedWallSignBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedCeilingHangingSignBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedWallHangingSignBlock;
 import com.wdcftgg.witherstormmod.common.item.TaintedSignItem;
 import com.wdcftgg.witherstormmod.common.item.TaintedTorchItem;
 import com.wdcftgg.witherstormmod.common.item.SlabItem;
@@ -20,6 +22,7 @@ import com.wdcftgg.witherstormmod.common.block.TaintedFenceGateBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedVeinBlock;
 import com.wdcftgg.witherstormmod.common.block.SimpleBlock;
 import com.wdcftgg.witherstormmod.common.block.PowerfulExplosiveBlock;
+import com.wdcftgg.witherstormmod.common.block.FormidibombBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedPressurePlateBlock;
 import com.wdcftgg.witherstormmod.common.block.DirectionalBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedGlassPaneBlock;
@@ -35,6 +38,7 @@ import com.wdcftgg.witherstormmod.common.block.TaintedStatueBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedWallBlock;
 import com.wdcftgg.witherstormmod.common.block.TaintedMushroomBlock;
 import com.wdcftgg.witherstormmod.common.block.PottedTaintedMushroomBlock;
+import com.wdcftgg.witherstormmod.common.block.TaintedLeavesBlock;
 import com.wdcftgg.witherstormmod.common.block.WitheredPhlegmBlock;
 import net.minecraft.block.BlockPressurePlate;
 import net.minecraft.block.Block;
@@ -49,11 +53,13 @@ import com.wdcftgg.witherstormmod.common.item.TaintedCarvedPumpkinItem;
 import net.minecraft.item.ItemDoor;
 import net.minecraft.item.EnumRarity;
 import net.minecraftforge.client.model.ModelLoader;
+import net.minecraft.client.renderer.block.statemap.StateMap;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.oredict.OreDictionary;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -118,28 +124,68 @@ public final class ModBlocks {
             item.setCreativeTab(ModCreativeTabs.MAIN);
             BLOCK_ITEMS.put(name, item);
             event.getRegistry().register(item);
+            registerOreDictionaryEntry(name, item);
             if (block instanceof TaintedCarvedPumpkinBlock) {
                 ((TaintedCarvedPumpkinBlock) block).registerDispenserBehavior(item);
             }
         }
     }
 
+    private static void registerOreDictionaryEntry(String name, Item item) {
+        if ("tainted_log".equals(name) || "tainted_wood".equals(name)) {
+            OreDictionary.registerOre("logWood", item);
+        } else if ("tainted_planks".equals(name)) {
+            OreDictionary.registerOre("plankWood", item);
+        } else if ("tainted_cobblestone".equals(name)) {
+            OreDictionary.registerOre("cobblestone", item);
+        } else if ("tainted_stone".equals(name)) {
+            OreDictionary.registerOre("stone", item);
+        }
+    }
+
     @SideOnly(Side.CLIENT)
     public static void registerModels() {
         for (Block block : BLOCKS.values()) {
+            String name = block.getRegistryName().getPath();
+            if ("tainted_hanging_sign".equals(name)
+                    || "tainted_wall_hanging_sign".equals(name)) {
+                mapHangingSignToParticleModel(block);
+            }
             if (isItemless(block)) {
                 continue;
             }
-            Item item = BLOCK_ITEMS.get(block.getRegistryName().getPath());
+            Item item = BLOCK_ITEMS.get(name);
             if (item == null) {
                 throw new IllegalStateException("Missing registered block item for " + block.getRegistryName());
             }
             ModelResourceLocation inventoryModel = new ModelResourceLocation(block.getRegistryName(), "inventory");
             ModelLoader.setCustomModelResourceLocation(item, 0, inventoryModel);
+            if (block instanceof TaintedLeavesBlock) {
+                ModelLoader.setCustomStateMapper(block, new StateMap.Builder()
+                        .ignore(net.minecraft.block.BlockLeaves.DECAYABLE,
+                                net.minecraft.block.BlockLeaves.CHECK_DECAY)
+                        .build());
+            }
             if (block instanceof TaintedWallBlock) {
                 ModelLoader.setCustomModelResourceLocation(item, 1, inventoryModel);
             }
         }
+    }
+
+    @SideOnly(Side.CLIENT)
+    private static void mapHangingSignToParticleModel(Block block) {
+        ModelLoader.setCustomStateMapper(block, mappedBlock -> {
+            Map<net.minecraft.block.state.IBlockState, ModelResourceLocation> locations =
+                    new LinkedHashMap<net.minecraft.block.state.IBlockState, ModelResourceLocation>();
+            // The external upstream sign model has no geometry; it only supplies tainted-plank particles.
+            ModelResourceLocation particleModel = new ModelResourceLocation(
+                    Tags.MOD_ID + ":tainted_sign", "normal");
+            for (net.minecraft.block.state.IBlockState state
+                    : mappedBlock.getBlockState().getValidStates()) {
+                locations.put(state, particleModel);
+            }
+            return locations;
+        });
     }
 
     private static Block createBlock(String name) {
@@ -147,7 +193,7 @@ public final class ModBlocks {
             return new PowerfulExplosiveBlock(name, false);
         }
         if ("formidibomb".equals(name)) {
-            return new PowerfulExplosiveBlock(name, true);
+            return new FormidibombBlock(name);
         }
         if ("super_beacon".equals(name)) {
             return new SuperBeaconBlock(name);
@@ -172,6 +218,12 @@ public final class ModBlocks {
         }
         if ("tainted_wall_sign".equals(name)) {
             return new TaintedWallSignBlock(name);
+        }
+        if ("tainted_hanging_sign".equals(name)) {
+            return new TaintedCeilingHangingSignBlock(name);
+        }
+        if ("tainted_wall_hanging_sign".equals(name)) {
+            return new TaintedWallHangingSignBlock(name);
         }
         if ("tainted_dust".equals(name)) {
             return new TaintedDustBlock(name);
@@ -223,7 +275,7 @@ public final class ModBlocks {
             return createSimpleBlock(name, Material.WOOD, 2.0F, 3.0F, SoundType.WOOD, false);
         }
         if ("tainted_leaves".equals(name)) {
-            return createSimpleBlock(name, Material.LEAVES, 0.2F, 0.2F, SoundType.PLANT, false);
+            return new TaintedLeavesBlock(name);
         }
         if ("tainted_zombie_sitting".equals(name) || "tainted_zombie_wall".equals(name)
                 || "tainted_zombie_lying".equals(name)) {
@@ -274,7 +326,9 @@ public final class ModBlocks {
             return new TaintedButtonBlock(name, !name.contains("stone"));
         }
         if (name.endsWith("_pressure_plate")) {
-            return new TaintedPressurePlateBlock(name, name.contains("stone") ? Material.ROCK : Material.WOOD, BlockPressurePlate.Sensitivity.EVERYTHING);
+            boolean stone = name.contains("stone");
+            return new TaintedPressurePlateBlock(name, stone ? Material.ROCK : Material.WOOD,
+                    stone ? BlockPressurePlate.Sensitivity.MOBS : BlockPressurePlate.Sensitivity.EVERYTHING);
         }
         if (name.endsWith("_sand")) {
             return new TaintedSandBlock(name, Material.SAND);

@@ -22,6 +22,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.EnumBlockRenderType;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.IBlockAccess;
@@ -53,6 +54,11 @@ public class WitheredPhlegmBlock extends BlockContainer {
     @Override
     public TileEntity createNewTileEntity(World world, int metadata) {
         return new WitheredPhlegmTileEntity();
+    }
+
+    @Override
+    public EnumBlockRenderType getRenderType(IBlockState state) {
+        return EnumBlockRenderType.MODEL;
     }
 
     @Override
@@ -150,6 +156,11 @@ public class WitheredPhlegmBlock extends BlockContainer {
     @Override
     public boolean isFullCube(IBlockState state) {
         return false;
+    }
+
+    @Override
+    public boolean causesSuffocation(IBlockState state) {
+        return true;
     }
 
     @Override

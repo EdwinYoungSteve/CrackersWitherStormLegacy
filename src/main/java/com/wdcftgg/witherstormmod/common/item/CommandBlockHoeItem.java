@@ -46,6 +46,11 @@ public class CommandBlockHoeItem extends ItemHoe {
     }
 
     @Override
+    public boolean isEnchantable(ItemStack stack) {
+        return getItemStackLimit(stack) == 1;
+    }
+
+    @Override
     public boolean hasCustomEntity(ItemStack stack) {
         return FireResistantItemEntity.isFireResistant(stack);
     }

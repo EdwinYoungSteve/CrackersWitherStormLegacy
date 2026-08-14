@@ -4,14 +4,24 @@ import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.WitherStormMod;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.projectile.EntityFireball;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.play.server.SPacketEntityVelocity;
+import net.minecraft.potion.Potion;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
+import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.inventory.SuperBeaconContainer;
 import com.wdcftgg.witherstormmod.common.tile.AbstractSuperBeaconTileEntity;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundCategory;
 import net.minecraft.util.SoundEvent;
+import net.minecraft.util.EnumHand;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
@@ -22,10 +32,16 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import net.minecraftforge.fml.relauncher.Side;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /** 将上游仅发往客户端的表现消息映射到 Forge 1.12 的 SimpleImpl 通道。 */
 public final class ModNetwork {
     public static final int SUPER_BEACON_RESUMMON_BURST = 0;
     public static final int SUPER_BEACON_ITEM_BURST = 1;
+    public static final int COMMAND_BLOCK_PARTICLES_GAUSSIAN = 0;
+    public static final int COMMAND_BLOCK_PARTICLES_UNIFORM_VELOCITY = 1;
+    public static final int COMMAND_BLOCK_PARTICLES_EXACT_VELOCITY = 2;
     private static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel(Tags.MOD_ID);
     private static boolean registered;
 
@@ -52,7 +68,31 @@ public final class ModNetwork {
         CHANNEL.registerMessage(DistantSuperBeaconMessage.Handler.class, DistantSuperBeaconMessage.class,
                 discriminator++, Side.CLIENT);
         CHANNEL.registerMessage(InjureWitherStormHeadMessage.Handler.class, InjureWitherStormHeadMessage.class,
-                discriminator, Side.SERVER);
+                discriminator++, Side.SERVER);
+        CHANNEL.registerMessage(BossThemeAccessMessage.Handler.class, BossThemeAccessMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(WitherSicknessMessage.Handler.class, WitherSicknessMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(CommandBlockParticlesMessage.Handler.class, CommandBlockParticlesMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(WitherStormLoopMessage.Handler.class, WitherStormLoopMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(UpdateDamagingProjectileMessage.Handler.class,
+                UpdateDamagingProjectileMessage.class, discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(HeadAttackedMessage.Handler.class, HeadAttackedMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(SuperBeaconValidEffectsMessage.Handler.class,
+                SuperBeaconValidEffectsMessage.class, discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(CreateDebrisMessage.Handler.class, CreateDebrisMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(StopSoundMessage.Handler.class, StopSoundMessage.class,
+                discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(PhasometerObservationMessage.Handler.class,
+                PhasometerObservationMessage.class, discriminator++, Side.CLIENT);
+        CHANNEL.registerMessage(AttackPlayingDeadCoreMessage.Handler.class,
+                AttackPlayingDeadCoreMessage.class, discriminator++, Side.SERVER);
+        CHANNEL.registerMessage(CommandBlockTickParticlesMessage.Handler.class,
+                CommandBlockTickParticlesMessage.class, discriminator++, Side.CLIENT);
         registered = true;
     }
 
@@ -61,10 +101,43 @@ public final class ModNetwork {
         CHANNEL.sendToAllTracking(new ShakeScreenMessage(duration, power), entity);
     }
 
-    public static void setPlayerMotion(EntityPlayerMP player, Vec3d motion) {
-        if (player == null || motion == null) return;
+    public static void shakePlayer(EntityPlayerMP player, float duration, float power) {
+        if (player == null) return;
+        CHANNEL.sendTo(new ShakeScreenMessage(duration, power), player);
+    }
+
+    public static void setPlayerMotion(EntityPlayerMP player, Entity movedEntity, Vec3d motion) {
+        if (player == null || movedEntity == null || motion == null) return;
         player.connection.sendPacket(new SPacketEntityVelocity(
-                player.getEntityId(), motion.x, motion.y, motion.z));
+                movedEntity.getEntityId(), motion.x, motion.y, motion.z));
+    }
+
+    public static void syncDamagingProjectile(EntityFireball projectile) {
+        if (projectile == null || projectile.world == null || projectile.world.isRemote) return;
+        CHANNEL.sendToAllTracking(new UpdateDamagingProjectileMessage(projectile), projectile);
+    }
+
+    public static void notifyHeadAttacked(Entity stormPart, int head) {
+        if (stormPart == null || stormPart.world == null || stormPart.world.isRemote) return;
+        CHANNEL.sendToAllTracking(new HeadAttackedMessage(stormPart.getEntityId(), head), stormPart);
+    }
+
+    public static void syncWitherSickness(EntityLivingBase entity, NBTTagCompound data) {
+        if (entity == null || entity.world == null || entity.world.isRemote || data == null) return;
+        WitherSicknessMessage message = new WitherSicknessMessage(entity.getEntityId(), data);
+        CHANNEL.sendToAllTracking(message, entity);
+        if (entity instanceof EntityPlayerMP) CHANNEL.sendTo(message, (EntityPlayerMP) entity);
+    }
+
+    public static void syncWitherSicknessTo(EntityLivingBase entity, NBTTagCompound data,
+                                             EntityPlayerMP player) {
+        if (entity == null || data == null || player == null) return;
+        CHANNEL.sendTo(new WitherSicknessMessage(entity.getEntityId(), data), player);
+    }
+
+    public static void sendSuperBeaconValidEffects(EntityPlayerMP player, Set<Potion> effects) {
+        if (player == null || effects == null) return;
+        CHANNEL.sendTo(new SuperBeaconValidEffectsMessage(effects), player);
     }
 
     public static void shakeNear(World world, double x, double y, double z, double radius,
@@ -107,6 +180,19 @@ public final class ModNetwork {
         CHANNEL.sendToAll(new GlobalSoundMessage(sound.getRegistryName(), volume, pitch));
     }
 
+    public static void stopSound(EntityPlayerMP player, SoundEvent sound, SoundCategory category) {
+        if (player == null || sound == null || sound.getRegistryName() == null || category == null) return;
+        CHANNEL.sendTo(new StopSoundMessage(sound.getRegistryName(), category), player);
+    }
+
+    public static void sendPhasometerObservation(EntityPlayerMP player, EnumHand hand,
+                                                  int remainingUseTicks,
+                                                  NBTTagCompound observation) {
+        if (player == null || hand == null || observation == null) return;
+        CHANNEL.sendTo(new PhasometerObservationMessage(hand,
+                player.dimension, remainingUseTicks, observation), player);
+    }
+
     public static void sendFormidibombExplosion(World world, Entity source, double x, double y, double z,
                                                 int radius, int squish) {
         if (world == null || world.isRemote) return;
@@ -131,6 +217,24 @@ public final class ModNetwork {
                         position.getX() + 0.5D, position.getY() + 1.5D, position.getZ() + 0.5D, 96.0D));
     }
 
+    public static void sendCommandBlockParticles(World world, Vec3d position, int count,
+                                                 double spreadX, double spreadY, double spreadZ,
+                                                 double speed, int distribution) {
+        if (world == null || world.isRemote || position == null || count <= 0) return;
+        CHANNEL.sendToAllAround(new CommandBlockParticlesMessage(position, count,
+                        spreadX, spreadY, spreadZ, speed, distribution),
+                new NetworkRegistry.TargetPoint(world.provider.getDimension(),
+                        position.x, position.y, position.z, 192.0D));
+    }
+
+    public static void sendCommandBlockTickParticles(
+            SupplementalEntities.CommandBlockEntity entity, float particleSpeed,
+            int luringPlayerId) {
+        if (entity == null || entity.world == null || entity.world.isRemote) return;
+        CHANNEL.sendToAllTracking(new CommandBlockTickParticlesMessage(entity.getEntityId(),
+                particleSpeed, luringPlayerId), entity);
+    }
+
     public static void updateDistantSuperBeacon(AbstractSuperBeaconTileEntity beacon) {
         if (beacon == null || beacon.getWorld() == null || beacon.getWorld().isRemote) return;
         int[] color = beacon.getBeamColor();
@@ -150,6 +254,40 @@ public final class ModNetwork {
     public static void injureWitherStormHead(WitherStormEntity storm, int head) {
         if (storm == null || !storm.world.isRemote || head < 0 || head >= storm.getTotalHeads()) return;
         CHANNEL.sendToServer(new InjureWitherStormHeadMessage(storm.getEntityId(), head));
+    }
+
+    public static void injureWitherStormHead(SupplementalEntities.WitherStormSegmentEntity segment, int head) {
+        if (segment == null || !segment.world.isRemote || head < 0 || head >= segment.getTotalHeads()) return;
+        CHANNEL.sendToServer(new InjureWitherStormHeadMessage(segment.getEntityId(), head));
+    }
+
+    public static void attackPlayingDeadCore(SupplementalEntities.CommandBlockEntity core) {
+        if (core == null || !core.world.isRemote) return;
+        CHANNEL.sendToServer(new AttackPlayingDeadCoreMessage(core.getEntityId()));
+    }
+
+    public static void sendBossThemeAccess(EntityPlayerMP player, WitherStormEntity storm, boolean allowed) {
+        if (player == null || storm == null || storm.world.isRemote) return;
+        CHANNEL.sendTo(new BossThemeAccessMessage(storm.getEntityId(), allowed), player);
+    }
+
+    public static void createDebris(EntityPlayerMP player, WitherStormEntity storm, boolean hidden) {
+        if (player == null || storm == null || storm.world == null || storm.world.isRemote) return;
+        CHANNEL.sendTo(new CreateDebrisMessage(storm.getEntityId(), hidden), player);
+    }
+
+    public static void updateWitherStormLoop(WitherStormEntity storm) {
+        if (storm == null || storm.world == null || storm.world.isRemote) return;
+        CHANNEL.sendToDimension(new WitherStormLoopMessage(storm.getEntityId(), storm.posX,
+                        storm.posY, storm.posZ, storm.getPhase(), true),
+                storm.world.provider.getDimension());
+    }
+
+    public static void removeWitherStormLoop(WitherStormEntity storm) {
+        if (storm == null || storm.world == null || storm.world.isRemote) return;
+        CHANNEL.sendToDimension(new WitherStormLoopMessage(storm.getEntityId(), storm.posX,
+                        storm.posY, storm.posZ, storm.getPhase(), false),
+                storm.world.provider.getDimension());
     }
 
     public static final class ShakeScreenMessage implements IMessage {
@@ -287,6 +425,88 @@ public final class ModNetwork {
             @Override
             public IMessage onMessage(GlobalSoundMessage message, MessageContext context) {
                 WitherStormMod.proxy.handleGlobalSound(message.sound, message.volume, message.pitch);
+                return null;
+            }
+        }
+    }
+
+    public static final class StopSoundMessage implements IMessage {
+        private ResourceLocation sound;
+        private SoundCategory category;
+
+        public StopSoundMessage() {
+        }
+
+        public StopSoundMessage(ResourceLocation sound, SoundCategory category) {
+            this.sound = sound;
+            this.category = category;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            sound = new ResourceLocation(ByteBufUtils.readUTF8String(buffer));
+            int ordinal = buffer.readUnsignedByte();
+            SoundCategory[] categories = SoundCategory.values();
+            category = ordinal < categories.length ? categories[ordinal] : SoundCategory.MASTER;
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            ByteBufUtils.writeUTF8String(buffer, sound.toString());
+            buffer.writeByte(category.ordinal());
+        }
+
+        public static final class Handler implements IMessageHandler<StopSoundMessage, IMessage> {
+            @Override
+            public IMessage onMessage(StopSoundMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleStopSound(message.sound, message.category);
+                return null;
+            }
+        }
+    }
+
+    public static final class PhasometerObservationMessage implements IMessage {
+        private EnumHand hand = EnumHand.MAIN_HAND;
+        private int dimension;
+        private int remainingUseTicks;
+        private NBTTagCompound observation = new NBTTagCompound();
+
+        public PhasometerObservationMessage() {
+        }
+
+        public PhasometerObservationMessage(EnumHand hand, int dimension,
+                                            int remainingUseTicks,
+                                            NBTTagCompound observation) {
+            this.hand = hand;
+            this.dimension = dimension;
+            this.remainingUseTicks = remainingUseTicks;
+            this.observation = observation.copy();
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            hand = buffer.readBoolean() ? EnumHand.OFF_HAND : EnumHand.MAIN_HAND;
+            dimension = buffer.readInt();
+            remainingUseTicks = buffer.readUnsignedShort();
+            NBTTagCompound decoded = ByteBufUtils.readTag(buffer);
+            observation = decoded == null ? new NBTTagCompound() : decoded;
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeBoolean(hand == EnumHand.OFF_HAND);
+            buffer.writeInt(dimension);
+            buffer.writeShort(Math.max(0, Math.min(65535, remainingUseTicks)));
+            ByteBufUtils.writeTag(buffer, observation);
+        }
+
+        public static final class Handler
+                implements IMessageHandler<PhasometerObservationMessage, IMessage> {
+            @Override
+            public IMessage onMessage(PhasometerObservationMessage message,
+                                      MessageContext context) {
+                WitherStormMod.proxy.handlePhasometerObservation(message.hand,
+                        message.dimension, message.remainingUseTicks, message.observation);
                 return null;
             }
         }
@@ -487,6 +707,152 @@ public final class ModNetwork {
         }
     }
 
+    public static final class CommandBlockParticlesMessage implements IMessage {
+        private double x;
+        private double y;
+        private double z;
+        private int count;
+        private double spreadX;
+        private double spreadY;
+        private double spreadZ;
+        private double speed;
+        private int distribution;
+
+        public CommandBlockParticlesMessage() {
+        }
+
+        public CommandBlockParticlesMessage(Vec3d position, int count,
+                                            double spreadX, double spreadY, double spreadZ,
+                                            double speed, int distribution) {
+            x = position.x;
+            y = position.y;
+            z = position.z;
+            this.count = count;
+            this.spreadX = spreadX;
+            this.spreadY = spreadY;
+            this.spreadZ = spreadZ;
+            this.speed = speed;
+            this.distribution = distribution;
+        }
+
+        public Vec3d getPosition() {
+            return new Vec3d(x, y, z);
+        }
+
+        public int getCount() {
+            return count;
+        }
+
+        public double getSpreadX() {
+            return spreadX;
+        }
+
+        public double getSpreadY() {
+            return spreadY;
+        }
+
+        public double getSpreadZ() {
+            return spreadZ;
+        }
+
+        public double getSpeed() {
+            return speed;
+        }
+
+        public int getDistribution() {
+            return distribution;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            x = buffer.readDouble();
+            y = buffer.readDouble();
+            z = buffer.readDouble();
+            count = buffer.readInt();
+            spreadX = buffer.readDouble();
+            spreadY = buffer.readDouble();
+            spreadZ = buffer.readDouble();
+            speed = buffer.readDouble();
+            distribution = buffer.readUnsignedByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeDouble(x);
+            buffer.writeDouble(y);
+            buffer.writeDouble(z);
+            buffer.writeInt(count);
+            buffer.writeDouble(spreadX);
+            buffer.writeDouble(spreadY);
+            buffer.writeDouble(spreadZ);
+            buffer.writeDouble(speed);
+            buffer.writeByte(distribution);
+        }
+
+        public static final class Handler
+                implements IMessageHandler<CommandBlockParticlesMessage, IMessage> {
+            @Override
+            public IMessage onMessage(CommandBlockParticlesMessage message,
+                                      MessageContext context) {
+                WitherStormMod.proxy.handleCommandBlockParticles(message);
+                return null;
+            }
+        }
+    }
+
+    /** One message represents exactly one server entity tick; it is never replayed. */
+    public static final class CommandBlockTickParticlesMessage implements IMessage {
+        private int entityId;
+        private float particleSpeed;
+        private int luringPlayerId;
+
+        public CommandBlockTickParticlesMessage() {
+        }
+
+        private CommandBlockTickParticlesMessage(int entityId, float particleSpeed,
+                                                 int luringPlayerId) {
+            this.entityId = entityId;
+            this.particleSpeed = particleSpeed;
+            this.luringPlayerId = luringPlayerId;
+        }
+
+        public int getEntityId() {
+            return entityId;
+        }
+
+        public float getParticleSpeed() {
+            return particleSpeed;
+        }
+
+        public int getLuringPlayerId() {
+            return luringPlayerId;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            particleSpeed = buffer.readFloat();
+            luringPlayerId = buffer.readInt();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeFloat(particleSpeed);
+            buffer.writeInt(luringPlayerId);
+        }
+
+        public static final class Handler
+                implements IMessageHandler<CommandBlockTickParticlesMessage, IMessage> {
+            @Override
+            public IMessage onMessage(CommandBlockTickParticlesMessage message,
+                                      MessageContext context) {
+                WitherStormMod.proxy.handleCommandBlockTickParticles(message);
+                return null;
+            }
+        }
+    }
+
     public static final class DistantSuperBeaconMessage implements IMessage {
         private net.minecraft.util.math.BlockPos position;
         private int red;
@@ -558,6 +924,170 @@ public final class ModNetwork {
         }
     }
 
+    public static final class WitherStormLoopMessage implements IMessage {
+        private int entityId;
+        private double x;
+        private double y;
+        private double z;
+        private int phase;
+        private boolean active;
+
+        public WitherStormLoopMessage() {
+        }
+
+        public WitherStormLoopMessage(int entityId, double x, double y, double z,
+                                      int phase, boolean active) {
+            this.entityId = entityId;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.phase = phase;
+            this.active = active;
+        }
+
+        public int getEntityId() { return entityId; }
+        public double getX() { return x; }
+        public double getY() { return y; }
+        public double getZ() { return z; }
+        public int getPhase() { return phase; }
+        public boolean isActive() { return active; }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            x = buffer.readDouble();
+            y = buffer.readDouble();
+            z = buffer.readDouble();
+            phase = buffer.readUnsignedByte();
+            active = buffer.readBoolean();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeDouble(x);
+            buffer.writeDouble(y);
+            buffer.writeDouble(z);
+            buffer.writeByte(phase);
+            buffer.writeBoolean(active);
+        }
+
+        public static final class Handler implements IMessageHandler<WitherStormLoopMessage, IMessage> {
+            @Override
+            public IMessage onMessage(WitherStormLoopMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleWitherStormLoop(message);
+                return null;
+            }
+        }
+    }
+
+    public static final class BossThemeAccessMessage implements IMessage {
+        private int entityId;
+        private boolean allowed;
+
+        public BossThemeAccessMessage() {
+        }
+
+        public BossThemeAccessMessage(int entityId, boolean allowed) {
+            this.entityId = entityId;
+            this.allowed = allowed;
+        }
+
+        public int getEntityId() {
+            return entityId;
+        }
+
+        public boolean isAllowed() {
+            return allowed;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            allowed = buffer.readBoolean();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeBoolean(allowed);
+        }
+
+        public static final class Handler implements IMessageHandler<BossThemeAccessMessage, IMessage> {
+            @Override
+            public IMessage onMessage(BossThemeAccessMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleBossThemeAccess(message.entityId, message.allowed);
+                return null;
+            }
+        }
+    }
+
+    public static final class CreateDebrisMessage implements IMessage {
+        private int entityId;
+        private boolean hidden;
+
+        public CreateDebrisMessage() {
+        }
+
+        public CreateDebrisMessage(int entityId, boolean hidden) {
+            this.entityId = entityId;
+            this.hidden = hidden;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            hidden = buffer.readBoolean();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeBoolean(hidden);
+        }
+
+        public static final class Handler implements IMessageHandler<CreateDebrisMessage, IMessage> {
+            @Override
+            public IMessage onMessage(CreateDebrisMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleCreateDebris(message.entityId, message.hidden);
+                return null;
+            }
+        }
+    }
+
+    public static final class WitherSicknessMessage implements IMessage {
+        private int entityId;
+        private NBTTagCompound data;
+
+        public WitherSicknessMessage() {
+        }
+
+        public WitherSicknessMessage(int entityId, NBTTagCompound data) {
+            this.entityId = entityId;
+            this.data = data.copy();
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            data = ByteBufUtils.readTag(buffer);
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            ByteBufUtils.writeTag(buffer, data);
+        }
+
+        public static final class Handler implements IMessageHandler<WitherSicknessMessage, IMessage> {
+            @Override
+            public IMessage onMessage(WitherSicknessMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleWitherSicknessSync(message.entityId, message.data);
+                return null;
+            }
+        }
+    }
+
     public static final class InjureWitherStormHeadMessage implements IMessage {
         private int entityId;
         private int head;
@@ -598,12 +1128,211 @@ public final class ModNetwork {
                                 && storm.canPlayerReachHead(player, message.head, reach)) {
                             accepted = storm.attackHead(message.head, player);
                         }
+                    } else if (entity instanceof SupplementalEntities.WitherStormSegmentEntity
+                            && message.head >= 0
+                            && message.head < ((SupplementalEntities.WitherStormSegmentEntity) entity).getTotalHeads()) {
+                        SupplementalEntities.WitherStormSegmentEntity segment =
+                                (SupplementalEntities.WitherStormSegmentEntity) entity;
+                        double reach = player.interactionManager.getBlockReachDistance();
+                        if (segment.tractorBeamActive(message.head)
+                                && segment.canPlayerReachHead(player, message.head, reach)) {
+                            accepted = segment.attackHead(message.head, player);
+                        }
                     }
                     player.world.playSound(null, player.posX, player.posY, player.posZ,
                             accepted ? SoundEvents.ENTITY_PLAYER_ATTACK_STRONG
                                     : SoundEvents.ENTITY_PLAYER_ATTACK_NODAMAGE,
                             net.minecraft.util.SoundCategory.PLAYERS, 1.0F, 1.0F);
                 });
+                return null;
+            }
+        }
+    }
+
+    public static final class AttackPlayingDeadCoreMessage implements IMessage {
+        private int entityId;
+
+        public AttackPlayingDeadCoreMessage() {
+        }
+
+        public AttackPlayingDeadCoreMessage(int entityId) {
+            this.entityId = entityId;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+        }
+
+        public static final class Handler implements IMessageHandler<AttackPlayingDeadCoreMessage, IMessage> {
+            @Override
+            public IMessage onMessage(final AttackPlayingDeadCoreMessage message,
+                                      final MessageContext context) {
+                final EntityPlayerMP player = context.getServerHandler().player;
+                player.getServerWorld().addScheduledTask(() -> {
+                    Entity entity = player.world.getEntityByID(message.entityId);
+                    if (!(entity instanceof SupplementalEntities.CommandBlockEntity)) return;
+                    SupplementalEntities.CommandBlockEntity core =
+                            (SupplementalEntities.CommandBlockEntity) entity;
+                    if (!canPlayerHitPlayingDeadCore(player, core)) return;
+                    core.attackPlayingDeadCore(player);
+                });
+                return null;
+            }
+
+            private static boolean canPlayerHitPlayingDeadCore(
+                    EntityPlayerMP player, SupplementalEntities.CommandBlockEntity core) {
+                if (!core.isEntityAlive() || core.isIndependentBowelsPart()
+                        || core.getCoreState()
+                        != SupplementalEntities.CommandBlockEntity.CoreState.PLAYING_DEAD) return false;
+                double reach = player.interactionManager.getBlockReachDistance();
+                Vec3d eyes = player.getPositionEyes(1.0F);
+                Vec3d look = player.getLook(1.0F);
+                Vec3d end = new Vec3d(eyes.x + look.x * reach,
+                        eyes.y + look.y * reach, eyes.z + look.z * reach);
+                // Match the client interaction envelope. This is selection
+                // tolerance only; the entity remains a 1x1x1 physical core.
+                RayTraceResult coreHit = core.getInteractionBoundingBox()
+                        .grow(Math.max(0.0D, core.getCollisionBorderSize()))
+                        .calculateIntercept(eyes, end);
+                if (coreHit == null || coreHit.hitVec == null) return false;
+
+                // The upstream core rests exactly on the podium top. Allow that
+                // coplanar block hit, but reject a wall materially in front of it.
+                RayTraceResult blockHit = player.world.rayTraceBlocks(eyes, end, false, true, false);
+                if (blockHit == null || blockHit.hitVec == null
+                        || eyes.distanceTo(blockHit.hitVec) + 0.35D
+                        >= eyes.distanceTo(coreHit.hitVec)) return true;
+
+                // A podium block can be the first 1.12 ray hit even while the
+                // ribcage/core is visibly selected. Allow that local overlap,
+                // but keep ordinary walls in front of the core authoritative.
+                BlockPos blockPos = blockHit.getBlockPos();
+                return blockPos != null && core.getInteractionBoundingBox()
+                        .intersects(new AxisAlignedBB(blockPos));
+            }
+        }
+    }
+
+    public static final class UpdateDamagingProjectileMessage implements IMessage {
+        private int entityId;
+        private double accelerationX;
+        private double accelerationY;
+        private double accelerationZ;
+
+        public UpdateDamagingProjectileMessage() {
+        }
+
+        public UpdateDamagingProjectileMessage(EntityFireball projectile) {
+            entityId = projectile.getEntityId();
+            accelerationX = projectile.accelerationX;
+            accelerationY = projectile.accelerationY;
+            accelerationZ = projectile.accelerationZ;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            accelerationX = buffer.readDouble();
+            accelerationY = buffer.readDouble();
+            accelerationZ = buffer.readDouble();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeDouble(accelerationX);
+            buffer.writeDouble(accelerationY);
+            buffer.writeDouble(accelerationZ);
+        }
+
+        public static final class Handler
+                implements IMessageHandler<UpdateDamagingProjectileMessage, IMessage> {
+            @Override
+            public IMessage onMessage(UpdateDamagingProjectileMessage message,
+                                      MessageContext context) {
+                WitherStormMod.proxy.handleDamagingProjectileSync(message.entityId,
+                        message.accelerationX, message.accelerationY, message.accelerationZ);
+                return null;
+            }
+        }
+    }
+
+    public static final class HeadAttackedMessage implements IMessage {
+        private int entityId;
+        private int head;
+
+        public HeadAttackedMessage() {
+        }
+
+        public HeadAttackedMessage(int entityId, int head) {
+            this.entityId = entityId;
+            this.head = head;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            entityId = buffer.readInt();
+            head = buffer.readUnsignedByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            buffer.writeInt(entityId);
+            buffer.writeByte(head);
+        }
+
+        public static final class Handler implements IMessageHandler<HeadAttackedMessage, IMessage> {
+            @Override
+            public IMessage onMessage(HeadAttackedMessage message, MessageContext context) {
+                WitherStormMod.proxy.handleHeadAttacked(message.entityId, message.head);
+                return null;
+            }
+        }
+    }
+
+    public static final class SuperBeaconValidEffectsMessage implements IMessage {
+        private final Set<Potion> effects = new HashSet<Potion>();
+
+        public SuperBeaconValidEffectsMessage() {
+        }
+
+        public SuperBeaconValidEffectsMessage(Set<Potion> effects) {
+            if (effects != null) this.effects.addAll(effects);
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buffer) {
+            effects.clear();
+            int count = buffer.readUnsignedByte();
+            for (int index = 0; index < count; index++) {
+                Potion effect = Potion.getPotionById(buffer.readInt());
+                if (effect != null) effects.add(effect);
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buffer) {
+            int count = Math.min(255, effects.size());
+            buffer.writeByte(count);
+            int written = 0;
+            for (Potion effect : effects) {
+                if (written++ >= count) break;
+                buffer.writeInt(Potion.getIdFromPotion(effect));
+            }
+        }
+
+        public static final class Handler
+                implements IMessageHandler<SuperBeaconValidEffectsMessage, IMessage> {
+            @Override
+            public IMessage onMessage(SuperBeaconValidEffectsMessage message,
+                                      MessageContext context) {
+                WitherStormMod.proxy.handleSuperBeaconValidEffects(message.effects);
                 return null;
             }
         }

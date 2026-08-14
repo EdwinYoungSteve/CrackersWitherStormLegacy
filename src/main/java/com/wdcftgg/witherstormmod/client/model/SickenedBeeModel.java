@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.client.model;
 
+import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.entity.Entity;
@@ -14,6 +15,7 @@ public class SickenedBeeModel extends ModelBase {
     private final ModelRenderer backLegs;
     private final ModelRenderer leftAntenna;
     private final ModelRenderer rightAntenna;
+    private final ModelRenderer stinger;
 
     public SickenedBeeModel() {
         textureWidth = 64;
@@ -23,7 +25,7 @@ public class SickenedBeeModel extends ModelBase {
         ModelRenderer body = new ModelRenderer(this, 0, 0);
         body.addBox(-3.5F, -4.0F, -5.0F, 7, 7, 10);
         bone.addChild(body);
-        ModelRenderer stinger = new ModelRenderer(this, 26, 7);
+        stinger = new ModelRenderer(this, 26, 7);
         stinger.addBox(0.0F, -1.0F, 5.0F, 0, 1, 2);
         body.addChild(stinger);
         leftAntenna = new ModelRenderer(this, 2, 0);
@@ -67,6 +69,13 @@ public class SickenedBeeModel extends ModelBase {
         leftAntenna.rotateAngleX = rightAntenna.rotateAngleX = 0.0F;
         bone.rotateAngleX = bone.rotateAngleY = bone.rotateAngleZ = 0.0F;
         bone.rotationPointY = 19.0F;
+        if (entity instanceof SickenedEntities.SickenedBeeEntity) {
+            SickenedEntities.SickenedBeeEntity bee =
+                    (SickenedEntities.SickenedBeeEntity) entity;
+            stinger.isHidden = bee.hasStung();
+        } else {
+            stinger.isHidden = false;
+        }
         if (resting) {
             rightWing.rotateAngleY = -0.2618F;
             rightWing.rotateAngleZ = 0.0F;
@@ -88,6 +97,13 @@ public class SickenedBeeModel extends ModelBase {
             frontLegs.rotateAngleX = -hover * (float) Math.PI * 0.1F + (float) Math.PI / 8.0F;
             backLegs.rotateAngleX = -hover * (float) Math.PI * 0.05F + (float) Math.PI / 4.0F;
             bone.rotationPointY = 19.0F - MathHelper.cos(ageInTicks * 0.18F) * 0.9F;
+        }
+        if (entity instanceof SickenedEntities.SickenedBeeEntity) {
+            SickenedEntities.SickenedBeeEntity bee =
+                    (SickenedEntities.SickenedBeeEntity) entity;
+            float attackPitch = bee.getBodyPitch(ageInTicks - entity.ticksExisted);
+            bone.rotateAngleX = bone.rotateAngleX * (1.0F - attackPitch)
+                    + 3.0915928F * attackPitch;
         }
         bone.render(scale);
     }

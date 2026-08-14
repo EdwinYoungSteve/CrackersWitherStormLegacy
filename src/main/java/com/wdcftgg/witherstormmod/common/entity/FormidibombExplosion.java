@@ -1,6 +1,8 @@
 package com.wdcftgg.witherstormmod.common.entity;
 
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
+import com.wdcftgg.witherstormmod.common.init.ModDamageSources;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -10,7 +12,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityTNTPrimed;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.DamageSource;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -30,11 +31,11 @@ public final class FormidibombExplosion {
     private FormidibombExplosion() {
     }
 
-    public static void explode(World world, @Nullable PowerfulExplosiveEntity.FormidibombEntity bomb, int radius, int squish,
+    public static void explode(World world, @Nullable Entity source, int radius, int squish,
                                double x, double y, double z) {
-        Entity owner = bomb == null ? null : bomb.getTntPlacedBy();
-        Explosion explosion = new Explosion(world, owner, x, y, z, radius, true, true);
-        world.playSound(null, x, y, z, ModSounds.get("formidibomb_explosion"), SoundCategory.BLOCKS, 16.0F, 1.0F);
+        Explosion explosion = new Explosion(world, source, x, y, z, radius, true, true);
+        // 爆炸音效由客户端按 earRingingEffects 配置选择响亮/安静版本播放，
+        // 服务端只广播震动音，避免客户端收到固定事件后无法按个人配置切换。
         world.playSound(null, x, y, z, ModSounds.get("tremble"), SoundCategory.BLOCKS, 32.0F, 1.0F);
 
         float diameter = radius * 2.0F;
@@ -42,12 +43,12 @@ public final class FormidibombExplosion {
                 MathHelper.floor(x - diameter - 1.0D), MathHelper.floor(y - diameter - 1.0D), MathHelper.floor(z - diameter - 1.0D),
                 MathHelper.floor(x + diameter + 1.0D), MathHelper.floor(y + diameter + 1.0D), MathHelper.floor(z + diameter + 1.0D));
 
-        // 上游在爆炸区域外再扩大 200 格寻找可被 Formidibomb 触发的风暴。
+        // 上游只击倒已经锁定 Formidibomb 且满足阶段、进度和引信距离条件的风暴。
         List<WitherStormEntity> storms = world.getEntitiesWithinAABB(
                 WitherStormEntity.class, area.grow(200.0D));
         for (WitherStormEntity storm : storms) storm.onFormidibombExplosion();
         // 先发送客户端表现包，再执行大范围方块遍历，避免爆炸视觉被服务端计算阻塞。
-        ModNetwork.sendFormidibombExplosion(world, bomb, x, y, z, radius, squish);
+        ModNetwork.sendFormidibombExplosion(world, source, x, y, z, radius, squish);
         ModNetwork.shakeDimension(world, 100.0F, 7.5F);
         ModNetwork.blindNear(world, x, y, z, 250.0D, 260, 40, 240);
 
@@ -70,12 +71,14 @@ public final class FormidibombExplosion {
                         }
 
                         float remainingPower = radius * (0.7F + world.rand.nextFloat() * 0.6F);
-                        float resistance = owner != null
-                                ? owner.getExplosionResistance(explosion, world, pos, state)
+                        float resistance = source != null
+                                ? source.getExplosionResistance(explosion, world, pos, state)
                                 : block.getExplosionResistance(world, pos, null, explosion);
-                        remainingPower -= (resistance + 0.3F) * 0.01F;
+                        remainingPower -= (resistance + 0.3F)
+                                * (WitherStormConfig.lowerBlockResistance ? 0.01F : 0.3F);
                         if (remainingPower <= 0.0F
-                                || owner != null && !owner.canExplosionDestroyBlock(explosion, world, pos, state, remainingPower)) continue;
+                                || source != null && !source.canExplosionDestroyBlock(
+                                        explosion, world, pos, state, remainingPower)) continue;
 
                         block.onBlockExploded(world, pos, explosion);
                         if (world.rand.nextInt(3) == 0 && world.isAirBlock(pos) && world.getBlockState(pos.down()).isFullBlock()) {
@@ -106,7 +109,7 @@ public final class FormidibombExplosion {
             double visibility = world.getBlockDensity(center, entity.getEntityBoundingBox());
             double power = (1.0D - distance) * visibility;
             float damage = (float) ((int) ((power * power + power) * 0.5D * 7.0D * diameter + 1.0D));
-            entity.attackEntityFrom(DamageSource.causeExplosionDamage(explosion), damage);
+            entity.attackEntityFrom(ModDamageSources.formidibomb(source), damage);
             double knockback = entity instanceof EntityLivingBase
                     ? EnchantmentProtection.getBlastDamageReduction((EntityLivingBase) entity, power)
                     : power;

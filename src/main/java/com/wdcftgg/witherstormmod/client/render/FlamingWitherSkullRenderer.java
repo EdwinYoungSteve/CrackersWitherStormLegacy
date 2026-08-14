@@ -26,30 +26,53 @@ public class FlamingWitherSkullRenderer<T extends EntityWitherSkull> extends Ren
 
     @Override
     public void doRender(T entity, double x, double y, double z, float entityYaw, float partialTicks) {
+        float previousBrightnessX = OpenGlHelper.lastBrightnessX;
+        float previousBrightnessY = OpenGlHelper.lastBrightnessY;
         GlStateManager.pushMatrix();
-        GlStateManager.disableCull();
-        float yaw = interpolateRotation(entity.prevRotationYaw, entity.rotationYaw, partialTicks);
-        float pitch = entity.prevRotationPitch + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
-        GlStateManager.translate((float) x, (float) y, (float) z);
-        GlStateManager.enableRescaleNormal();
-        GlStateManager.scale(-1.0F, -1.0F, 1.0F);
-        GlStateManager.enableAlpha();
-        bindTexture(texture);
-        model.render(entity, 0.0F, 0.0F, entity.ticksExisted + partialTicks, yaw, pitch, 0.0625F);
+        try {
+            float yaw = interpolateRotation(entity.prevRotationYaw, entity.rotationYaw, partialTicks);
+            float pitch = entity.prevRotationPitch
+                    + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
+            GlStateManager.translate((float) x, (float) y, (float) z);
+            GlStateManager.enableRescaleNormal();
+            GlStateManager.scale(-1.8F, -1.8F, 1.8F);
+            GlStateManager.enableAlpha();
+            GlStateManager.enableCull();
+            int packedLight = entity.getBrightnessForRender();
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                    240.0F, packedLight / 65536);
+            bindTexture(texture);
+            model.render(entity, 0.0F, 0.0F, entity.ticksExisted + partialTicks,
+                    yaw, pitch, 0.0625F);
 
-        bindTexture(emissiveTexture);
-        GlStateManager.enableBlend();
-        GlStateManager.disableAlpha();
-        GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 61680.0F, 0.0F);
-        Minecraft.getMinecraft().entityRenderer.setupFogColor(true);
-        model.render(entity, 0.0F, 0.0F, entity.ticksExisted + partialTicks, yaw, pitch, 0.0625F);
-        Minecraft.getMinecraft().entityRenderer.setupFogColor(false);
-        int light = entity.getBrightnessForRender();
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, light % 65536, light / 65536);
-        GlStateManager.disableBlend();
-        GlStateManager.enableAlpha();
-        GlStateManager.popMatrix();
+            bindTexture(emissiveTexture);
+            GlStateManager.enableBlend();
+            GlStateManager.disableAlpha();
+            GlStateManager.disableCull();
+            GlStateManager.depthMask(false);
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ONE);
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 61680.0F, 0.0F);
+            Minecraft.getMinecraft().entityRenderer.setupFogColor(true);
+            try {
+                model.render(entity, 0.0F, 0.0F, entity.ticksExisted + partialTicks,
+                        yaw, pitch, 0.0625F);
+            } finally {
+                Minecraft.getMinecraft().entityRenderer.setupFogColor(false);
+            }
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                    previousBrightnessX, previousBrightnessY);
+            GlStateManager.depthMask(true);
+            GlStateManager.enableCull();
+            GlStateManager.disableBlend();
+            GlStateManager.enableAlpha();
+            GlStateManager.disableRescaleNormal();
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.popMatrix();
+        }
         super.doRender(entity, x, y, z, entityYaw, partialTicks);
     }
 

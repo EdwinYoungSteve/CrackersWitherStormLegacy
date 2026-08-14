@@ -71,16 +71,34 @@ public final class AdvancementResourceConverter {
             throw new IOException("Unsupported upstream advancement: " + entryName);
         }
 
-        JsonObject advancement;
+        return convertParsed(entryName, relative, readAdvancement(entryName, source));
+    }
+
+    public static JsonObject convertRecipeAdvancement(String entryName, InputStream source)
+            throws IOException {
+        String relative = relativeName(entryName);
+        if (!relative.startsWith("recipes/")) {
+            throw new IOException("Not an upstream recipe advancement: " + entryName);
+        }
+        JsonObject advancement = readAdvancement(entryName, source);
+        if (!hasLegacyRecipeReward(advancement)) return null;
+        return convertParsed(entryName, relative, advancement);
+    }
+
+    private static JsonObject readAdvancement(String entryName, InputStream source) throws IOException {
         try (Reader reader = new InputStreamReader(source, StandardCharsets.UTF_8)) {
-            advancement = JsonParser.parseReader(reader).getAsJsonObject();
+            return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (RuntimeException exception) {
             throw new IOException("Invalid upstream advancement: " + entryName, exception);
         }
+    }
 
+    private static JsonObject convertParsed(String entryName, String relative,
+                                            JsonObject advancement) throws IOException {
         convertDisplay(advancement);
         convertCriteria(advancement, relative);
         convertRewards(advancement);
+        advancement.remove("sends_telemetry_event");
         advancement.addProperty(SOURCE_MARKER, entryName);
         return advancement;
     }
@@ -247,7 +265,7 @@ public final class AdvancementResourceConverter {
             JsonObject predicate = source.deepCopy();
             predicate.remove("items");
             predicate.remove("tag");
-            predicate.addProperty("item", convertItemId(itemId));
+            predicate.addProperty("item", convertItemId(itemId, relativeName));
             applyLegacyItemMetadata(predicate, itemId);
             alternatives.add(predicate);
         }
@@ -394,6 +412,18 @@ public final class AdvancementResourceConverter {
         else rewards.add("recipes", converted);
     }
 
+    private static boolean hasLegacyRecipeReward(JsonObject advancement) throws IOException {
+        if (!advancement.has("rewards")) return false;
+        JsonObject rewards = JsonUtils.getJsonObject(advancement, "rewards");
+        if (!rewards.has("recipes")) return false;
+        JsonArray recipes = JsonUtils.getJsonArray(rewards, "recipes");
+        if (recipes.size() == 0) return false;
+        for (JsonElement element : recipes) {
+            if (!isLegacyUnlockableRecipe(JsonUtils.getString(element, "recipe id"))) return false;
+        }
+        return true;
+    }
+
     private static boolean isLegacyUnlockableRecipe(String recipeId) throws IOException {
         String namespace = "minecraft";
         String path = recipeId;
@@ -421,6 +451,8 @@ public final class AdvancementResourceConverter {
     private static void applyLegacyItemMetadata(JsonObject item, String originalItemId) {
         if ("minecraft:wither_skeleton_skull".equals(originalItemId)) {
             item.addProperty("data", 1);
+        } else if ("minecraft:lapis_lazuli".equals(originalItemId)) {
+            item.addProperty("data", 4);
         }
     }
 
@@ -434,6 +466,33 @@ public final class AdvancementResourceConverter {
         if ("minecraft:spyglass".equals(itemId)) {
             return "witherstormmod:phasometer";
         }
+        if ("minecraft:barrel".equals(itemId)) {
+            return "futuremc:barrel";
+        }
+        if ("minecraft:firework_rocket".equals(itemId)) {
+            return "minecraft:fireworks";
+        }
+        if ("minecraft:lapis_lazuli".equals(itemId)) {
+            return "minecraft:dye";
+        }
+        if ("minecraft:suspicious_stew".equals(itemId)) {
+            return "futuremc:suspicious_stew";
+        }
+        if ("minecraft:crossbow".equals(itemId)) {
+            return "futuremc:crossbow";
+        }
+        if ("minecraft:honey_bottle".equals(itemId)
+                || "minecraft:honeycomb".equals(itemId)
+                || "minecraft:wither_rose".equals(itemId)) {
+            return "futuremc:" + itemId.substring("minecraft:".length());
+        }
         return itemId;
+    }
+
+    private static String convertItemId(String itemId, String relativeName) {
+        if ("minecraft:spyglass".equals(itemId) && relativeName.startsWith("recipes/")) {
+            return "minecraft:glass_bottle";
+        }
+        return convertItemId(itemId);
     }
 }

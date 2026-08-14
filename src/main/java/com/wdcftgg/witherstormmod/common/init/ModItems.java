@@ -94,6 +94,7 @@ public final class ModItems {
         for (Item item : ITEMS.values()) {
             ModelLoader.setCustomModelResourceLocation(item, 0, new ModelResourceLocation(item.getRegistryName(), "inventory"));
         }
+        FormidiBladeItem.registerPropertyOverrides();
     }
 
     private static final class ModBlocksContains {

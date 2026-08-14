@@ -1,8 +1,12 @@
 package com.wdcftgg.witherstormmod.common.block;
 
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
+import com.wdcftgg.witherstormmod.common.entity.FormidibombSource;
 import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
+import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import net.minecraft.block.BlockTNT;
+import net.minecraft.block.material.EnumPushReaction;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLivingBase;
@@ -27,7 +31,7 @@ public class PowerfulExplosiveBlock extends BlockTNT {
         setCreativeTab(ModCreativeTabs.MAIN);
         setHardness(formidibomb ? 0.8F : 0.0F);
         setResistance(SimpleBlock.toLegacyResistance(formidibomb ? 0.8F : 0.0F));
-        setSoundType(SoundType.WOOD);
+        setSoundType(SoundType.PLANT);
         if (formidibomb) {
             setLightLevel(7.0F / 15.0F);
         }
@@ -48,10 +52,19 @@ public class PowerfulExplosiveBlock extends BlockTNT {
         if (world.isRemote || !state.getValue(EXPLODE)) {
             return;
         }
-        EntityTNTPrimed explosive = createExplosive(world, position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D, igniter);
+        TileEntity tile = world.getTileEntity(position);
+        FormidibombSource previous = tile instanceof FormidibombSource ? (FormidibombSource) tile : null;
+        EntityTNTPrimed explosive = createExplosive(world, position.getX() + 0.5D, position.getY(),
+                position.getZ() + 0.5D, igniter, previous, state);
+        if (explosive instanceof PowerfulExplosiveEntity.FormidibombEntity
+                && explosive.getFuse() > WitherStormConfig.catchFireFuseTicks) {
+            ((PowerfulExplosiveEntity.FormidibombEntity) explosive)
+                    .initiateFuse(WitherStormConfig.catchFireFuseTicks);
+        }
         world.spawnEntity(explosive);
         world.playSound((EntityPlayer) null, explosive.posX, explosive.posY, explosive.posZ,
-                SoundEvents.ENTITY_TNT_PRIMED, SoundCategory.BLOCKS, 1.0F, formidibomb ? 0.65F : 0.9F);
+                formidibomb ? SoundEvents.ENTITY_TNT_PRIMED : ModSounds.get("super_tnt_fuse"),
+                SoundCategory.BLOCKS, 1.0F, 1.0F);
     }
 
     @Override
@@ -59,15 +72,27 @@ public class PowerfulExplosiveBlock extends BlockTNT {
         if (world.isRemote) {
             return;
         }
-        EntityTNTPrimed explosive = createExplosive(world, position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D,
-                explosion.getExplosivePlacedBy());
-        explosive.setFuse(world.rand.nextInt(Math.max(1, explosive.getFuse() / 4)) + explosive.getFuse() / 8);
+        EntityTNTPrimed explosive = createExplosive(world, position.getX() + 0.5D, position.getY(),
+                position.getZ() + 0.5D, explosion.getExplosivePlacedBy(), null, null);
+        if (explosive instanceof PowerfulExplosiveEntity.FormidibombEntity) {
+            ((PowerfulExplosiveEntity.FormidibombEntity) explosive).initiateFuse(20);
+        } else {
+            explosive.setFuse(world.rand.nextInt(Math.max(1, explosive.getFuse() / 4)) + explosive.getFuse() / 8);
+        }
         world.spawnEntity(explosive);
     }
 
-    private EntityTNTPrimed createExplosive(World world, double positionX, double positionY, double positionZ, EntityLivingBase igniter) {
+    protected EntityTNTPrimed createExplosive(World world, double positionX, double positionY, double positionZ,
+                                               EntityLivingBase igniter, FormidibombSource previous,
+                                               IBlockState state) {
         return formidibomb
-                ? new PowerfulExplosiveEntity.FormidibombEntity(world, positionX, positionY, positionZ, igniter)
+                ? new PowerfulExplosiveEntity.FormidibombEntity(
+                        world, positionX, positionY, positionZ, igniter, previous, state)
                 : new PowerfulExplosiveEntity.SuperTntEntity(world, positionX, positionY, positionZ, igniter);
+    }
+
+    @Override
+    public EnumPushReaction getPushReaction(IBlockState state) {
+        return EnumPushReaction.BLOCK;
     }
 }

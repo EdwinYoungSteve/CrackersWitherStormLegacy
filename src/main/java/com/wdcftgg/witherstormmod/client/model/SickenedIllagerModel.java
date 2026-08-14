@@ -3,6 +3,7 @@ package com.wdcftgg.witherstormmod.client.model;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.EnumHandSide;
 import net.minecraft.util.math.MathHelper;
 
 public class SickenedIllagerModel extends ModelBase {
@@ -51,6 +52,10 @@ public class SickenedIllagerModel extends ModelBase {
         leftArm.render(scale);
         rightLeg.render(scale);
         leftLeg.render(scale);
+    }
+
+    public void postRenderArm(float scale, EnumHandSide side) {
+        (side == EnumHandSide.RIGHT ? rightArm : leftArm).postRender(scale);
     }
 
     @Override

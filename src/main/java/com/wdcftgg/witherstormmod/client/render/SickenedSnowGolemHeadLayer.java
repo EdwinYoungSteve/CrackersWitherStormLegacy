@@ -19,7 +19,7 @@ public class SickenedSnowGolemHeadLayer implements LayerRenderer<SickenedEntitie
     @Override
     public void doRenderLayer(SickenedEntities.SickenedSnowGolemEntity entity, float limbSwing, float limbSwingAmount,
                               float partialTicks, float ageInTicks, float netHeadYaw, float headPitch, float scale) {
-        if (entity.isInvisible()) return;
+        if (entity.isInvisible() || !entity.isPumpkinEquipped()) return;
         GlStateManager.pushMatrix();
         ((ModelSnowMan) renderer.getMainModel()).head.postRender(0.0625F);
         GlStateManager.translate(0.0F, -0.34375F, 0.0F);

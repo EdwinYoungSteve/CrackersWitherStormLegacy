@@ -65,6 +65,24 @@ public final class StructureTemplates {
         return true;
     }
 
+    /** 放置生成平台；自动生成模板返回数据标记，其余模板回退到结构原点。 */
+    public static BlockPos placeStormSpawnPlatform(World world, String id, BlockPos origin, Rotation rotation) {
+        TemplateData data = getData(id);
+        if (data == null) return null;
+        PlacementSettings settings = new PlacementSettings().setMirror(Mirror.NONE).setRotation(rotation)
+                .setIgnoreEntities(false).setIgnoreStructureBlock(true);
+        data.template.addBlocksToWorld(world, origin, FEATURE_PLACEMENT_PROCESSOR, settings, 2);
+        for (DataMarker marker : data.dataMarkers) {
+            if ("spawn_position".equals(marker.metadata)) {
+                return Template.transformedBlockPos(settings, marker.pos).add(origin);
+            }
+        }
+        if ("auto_spawn_platform".equals(id)) {
+            WitherStormMod.LOGGER.warn("Upstream automatic spawn platform has no spawn_position marker");
+        }
+        return origin;
+    }
+
     public static boolean remove(World world, String id, BlockPos origin, Rotation rotation) {
         Template template = get(id);
         if (template == null) return false;
@@ -96,6 +114,12 @@ public final class StructureTemplates {
     public static BlockPos getTopAnchoredFeatureOrigin(Template template, BlockPos anchor, Rotation rotation) {
         RelativeBounds bounds = getRelativeBounds(template, rotation);
         return anchor.add(-bounds.centerX(), -template.getSize().getY(), -bounds.centerZ());
+    }
+
+    /** Upstream CommandBlockPodiumFeature centers the template on all three axes. */
+    public static BlockPos getFeatureOrigin(BlockPos anchor, Template template, Rotation rotation) {
+        RelativeBounds bounds = getRelativeBounds(template, rotation);
+        return anchor.add(-bounds.centerX(), -bounds.centerY(), -bounds.centerZ());
     }
 
     public static Template get(String id) {
@@ -184,12 +208,13 @@ public final class StructureTemplates {
         try (InputStream stream = UpstreamResourceArchive.open(path)) {
             NBTTagCompound root = CompressedStreamTools.readCompressed(stream);
             List<Connector> connectors = readConnectors(root);
+            List<DataMarker> dataMarkers = readDataMarkers(root);
             convertPalette(root.getTagList("palette", 10));
             convertBlockEntities(root.getTagList("blocks", 10));
             root.setInteger("DataVersion", 1343);
             Template template = new Template();
             template.read(root);
-            return new TemplateData(template, connectors);
+            return new TemplateData(template, connectors, dataMarkers);
         } catch (IOException | RuntimeException exception) {
             WitherStormMod.LOGGER.error("Unable to convert upstream structure {}", id, exception);
             return null;
@@ -238,6 +263,10 @@ public final class StructureTemplates {
         if (name.startsWith("witherstormmod:")) return new Mapping(name);
         String path = name.substring(name.indexOf(':') + 1);
         if (path.equals("jigsaw") || path.equals("structure_block")) return new Mapping("minecraft:air");
+        ResourceLocation directId = new ResourceLocation(name);
+        if (Block.REGISTRY.containsKey(directId)) return new Mapping(name);
+        ResourceLocation futureId = new ResourceLocation("futuremc", path);
+        if (Block.REGISTRY.containsKey(futureId)) return new Mapping(futureId.toString());
         String[] woods = {"oak", "spruce", "birch", "jungle", "acacia", "dark_oak"};
         for (int i = 0; i < woods.length; i++) {
             String wood = woods[i];
@@ -293,8 +322,7 @@ public final class StructureTemplates {
             if (path.equals(color + "_concrete")) return new Mapping("minecraft:concrete", "color", color);
             if (path.equals(color + "_carpet")) return new Mapping("minecraft:carpet", "color", color);
         }
-        ResourceLocation direct = new ResourceLocation(name);
-        return Block.REGISTRY.containsKey(direct) ? new Mapping(name) : new Mapping("minecraft:stone");
+        return new Mapping("minecraft:stone");
     }
 
     private static void convertBlockEntities(NBTTagList blocks) {
@@ -302,10 +330,14 @@ public final class StructureTemplates {
             NBTTagCompound data = blocks.getCompoundTagAt(index).getCompoundTag("nbt");
             if (!data.hasKey("id", 8)) continue;
             String id = data.getString("id");
-            if ("minecraft:barrel".equals(id)) data.setString("id", "minecraft:chest");
-            else if ("minecraft:blast_furnace".equals(id) || "minecraft:smoker".equals(id)) data.setString("id", "minecraft:furnace");
-            else if (id.startsWith("minecraft:") && (id.contains("beehive") || id.contains("bell") || id.contains("campfire")
-                    || id.contains("jigsaw") || id.contains("lectern") || id.contains("sculk"))) data.removeTag("id");
+            if ("minecraft:barrel".equals(id) || "minecraft:blast_furnace".equals(id)
+                    || "minecraft:smoker".equals(id) || "minecraft:beehive".equals(id)
+                    || "minecraft:bee_nest".equals(id) || "minecraft:bell".equals(id)
+                    || "minecraft:campfire".equals(id)) {
+                data.setString("id", "futuremc:" + id.substring("minecraft:".length()));
+                if ("minecraft:bee_nest".equals(id)) data.setString("id", "futuremc:beehive");
+            } else if (id.startsWith("minecraft:") && (id.contains("jigsaw")
+                    || id.contains("lectern") || id.contains("sculk"))) data.removeTag("id");
             if (data.hasKey("LootTable", 8) && data.getString("LootTable").equals("witherstormmod:chests/bowels_general"))
                 data.setString("LootTable", "witherstormmod:chests/bowels_general");
         }
@@ -327,6 +359,27 @@ public final class StructureTemplates {
             if (facing == null) facing = EnumFacing.NORTH;
             result.add(new Connector(new BlockPos(position.getIntAt(0), position.getIntAt(1), position.getIntAt(2)),
                     facing, data.getString("name"), data.getString("target"), data.getString("pool")));
+        }
+        return result;
+    }
+
+    private static List<DataMarker> readDataMarkers(NBTTagCompound root) {
+        List<DataMarker> result = new ArrayList<DataMarker>();
+        NBTTagList palette = root.getTagList("palette", 10);
+        NBTTagList blocks = root.getTagList("blocks", 10);
+        for (int index = 0; index < blocks.tagCount(); index++) {
+            NBTTagCompound block = blocks.getCompoundTagAt(index);
+            int stateIndex = block.getInteger("state");
+            if (stateIndex < 0 || stateIndex >= palette.tagCount()
+                    || !"minecraft:structure_block".equals(palette.getCompoundTagAt(stateIndex).getString("Name"))) {
+                continue;
+            }
+            NBTTagCompound data = block.getCompoundTag("nbt");
+            String metadata = data.getString("metadata");
+            if (metadata.isEmpty()) continue;
+            NBTTagList position = block.getTagList("pos", 3);
+            result.add(new DataMarker(new BlockPos(position.getIntAt(0), position.getIntAt(1),
+                    position.getIntAt(2)), metadata));
         }
         return result;
     }
@@ -401,7 +454,8 @@ public final class StructureTemplates {
         pools.put("witherstormmod:bowels/bowels_caves_ends", weights("bowels/bowels_cave_small_end", 10, "bowels/bowels_cave_portal_end", 8,
                 "bowels/bowels_cave_nostalgia", 6, "bowels/bowels_cave_tree_end", 6, "bowels/bowels_cave_outpost", 10,
                 "bowels/bowels_cave_pyramid", 10, "bowels/bowels_cave_fragmented_fortress", 10, "bowels/bowels_cave_ruined_portal", 8,
-                "bowels/bowels_cave_ruined_treasure", 6, "bowels/bowels_cave_origin", 6, "bowels/bowels_cave_overgrown_tainted_tree", 6,
+                "bowels/bowels_cave_ruined_treasure", 6, "bowels/bowels_cave_twisted_village", 8,
+                "bowels/bowels_cave_long_lost_volcano", 6, "bowels/bowels_cave_origin", 6, "bowels/bowels_cave_overgrown_tainted_tree", 6,
                 "bowels/bowels_cave_pama_machine", 4, "bowels/bowels_cave_statues_of_order", 4, "bowels/bowels_cave_tainted_beach", 6,
                 "bowels/bowels_cave_tainted_redstone", 4, "bowels/bowels_cave_tainted_terminal", 2, "bowels/bowels_cave_trapped_chest", 4,
                 "bowels/bowels_cave_weathered_street_path", 6, "bowels/bowels_cave_withered_well", 2, "bowels/bowels_cave_woodland_mansion", 4,
@@ -419,7 +473,23 @@ public final class StructureTemplates {
     private static final class TemplateData {
         private final Template template;
         private final List<Connector> connectors;
-        private TemplateData(Template template, List<Connector> connectors) { this.template = template; this.connectors = connectors; }
+        private final List<DataMarker> dataMarkers;
+
+        private TemplateData(Template template, List<Connector> connectors, List<DataMarker> dataMarkers) {
+            this.template = template;
+            this.connectors = connectors;
+            this.dataMarkers = dataMarkers;
+        }
+    }
+
+    private static final class DataMarker {
+        private final BlockPos pos;
+        private final String metadata;
+
+        private DataMarker(BlockPos pos, String metadata) {
+            this.pos = pos;
+            this.metadata = metadata;
+        }
     }
 
     private static final class Connector {

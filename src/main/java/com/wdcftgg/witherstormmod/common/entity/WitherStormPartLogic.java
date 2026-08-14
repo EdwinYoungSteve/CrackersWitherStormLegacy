@@ -2,7 +2,7 @@ package com.wdcftgg.witherstormmod.common.entity;
 
 import java.util.Random;
 
-/** Pure timing and animation rules shared by the 1.12 entities. */
+/** 供 1.12 实体共用的计时和动画规则。 */
 public final class WitherStormPartLogic {
     private WitherStormPartLogic() {
     }
@@ -19,20 +19,31 @@ public final class WitherStormPartLogic {
         return 60 + random.nextInt(40);
     }
 
-    public static float advanceMouth(float current, boolean roaring, boolean biting) {
-        if (!biting && roaring) {
-            return Math.clamp(current + (1.0F - current) * 0.15F + 0.04F, 0.0F, 2.0F);
-        }
-        if (biting) {
-            return Math.clamp(current + (1.0F - current) * 0.16F + 0.1F, 0.0F, 1.4F);
-        }
-        return Math.clamp(current - current * 0.16F - 0.02F, 0.0F, 2.0F);
+    public static double randomBetween(Random random, double minimum, double maximum) {
+        return minimum + random.nextDouble() * (maximum - minimum);
     }
 
-    public static float advanceFade(float current, boolean playingDead, Random random) {
-        float next = playingDead ? current + 1.0F + random.nextFloat() * 2.0F
+    public static float advanceMouth(float current, boolean roaring, boolean biting) {
+        if (!biting && roaring) {
+            return clamp(current + (1.0F - current) * 0.15F + 0.04F, 0.0F, 2.0F);
+        }
+        if (biting) {
+            return clamp(current + (1.0F - current) * 0.16F + 0.1F, 0.0F, 1.4F);
+        }
+        return clamp(current - current * 0.16F - 0.02F, 0.0F, 2.0F);
+    }
+
+    public static float advanceFade(float current, boolean shouldFade, Random random) {
+        float next = shouldFade ? current + 1.0F + random.nextFloat() * 2.0F
                 : current - 1.0F - random.nextFloat() * 2.0F;
-        return Math.clamp(next, 0.0F, 300.0F);
+        return clamp(next, 0.0F, 300.0F);
+    }
+
+    public static int applyFadeLight(int packedLight, float fadeAnimation) {
+        int minimumBlockLight = Math.max(0, (int) ((100.0F - fadeAnimation) / 4.0F - 10.0F));
+        int currentBlockLight = packedLight & 0xFFFF;
+        int adjustedBlockLight = Math.max(currentBlockLight, minimumBlockLight << 4);
+        return packedLight & 0xFFFF0000 | adjustedBlockLight;
     }
 
     public static float advanceShake(float current, boolean shaking, Random random) {
@@ -40,7 +51,7 @@ public final class WitherStormPartLogic {
     }
 
     public static float shakeRoll(float previous, float current, float partialTicks) {
-        float lerp = Math.clamp(previous + (current - previous) * partialTicks, 0.0F, 1.0F);
+        float lerp = clamp(previous + (current - previous) * partialTicks, 0.0F, 1.0F);
         return (float) Math.sin(lerp * Math.PI) * (float) Math.sin(lerp * Math.PI * 12.0F)
                 * 0.05F * (float) Math.PI;
     }
@@ -55,5 +66,10 @@ public final class WitherStormPartLogic {
 
     public static int segmentFreeFallDelay(Random random) {
         return Math.max(220, random.nextInt(260));
+    }
+
+    /** Java 8 运行时没有 Math.clamp，统一使用本地实现避免链接到高版本 JDK。 */
+    private static float clamp(float value, float minimum, float maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
     }
 }

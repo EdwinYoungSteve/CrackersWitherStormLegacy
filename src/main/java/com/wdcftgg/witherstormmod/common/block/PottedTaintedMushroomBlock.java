@@ -5,13 +5,19 @@ import net.minecraft.block.Block;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.block.state.BlockFaceShape;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
+import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
+import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -37,6 +43,42 @@ public class PottedTaintedMushroomBlock extends Block {
     @Override
     public AxisAlignedBB getCollisionBoundingBox(IBlockState state, IBlockAccess source, BlockPos pos) {
         return SHAPE;
+    }
+
+    @Override
+    public boolean canPlaceBlockAt(World world, BlockPos pos) {
+        return super.canPlaceBlockAt(world, pos) && hasPotSupport(world, pos);
+    }
+
+    @Override
+    public void neighborChanged(IBlockState state, World world, BlockPos pos, Block neighborBlock,
+                                BlockPos neighborPos) {
+        if (!hasPotSupport(world, pos)) {
+            dropBlockAsItem(world, pos, state, 0);
+            world.setBlockToAir(pos);
+        }
+    }
+
+    @Override
+    public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player,
+                                    EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
+        if (!world.isRemote) {
+            ItemStack mushroom = new ItemStack(ModBlocks.get("tainted_mushroom"));
+            if (player.getHeldItem(hand).isEmpty()) {
+                player.setHeldItem(hand, mushroom);
+            } else if (!player.inventory.addItemStackToInventory(mushroom)) {
+                player.dropItem(mushroom, false);
+            }
+            world.setBlockState(pos, Blocks.FLOWER_POT.getDefaultState(), 3);
+        }
+        return true;
+    }
+
+    private static boolean hasPotSupport(World world, BlockPos pos) {
+        BlockPos below = pos.down();
+        IBlockState support = world.getBlockState(below);
+        return support.isTopSolid()
+                || support.getBlockFaceShape(world, below, EnumFacing.UP) == BlockFaceShape.SOLID;
     }
 
     @Override

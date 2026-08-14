@@ -10,6 +10,8 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
+import java.util.Random;
+
 /** 红石控制的病化尘土灯，保留上游按状态发光的语义。 */
 public class TaintedDustLampBlock extends Block {
 
@@ -61,11 +63,22 @@ public class TaintedDustLampBlock extends Block {
         updatePoweredState(world, position, state);
     }
 
+    @Override
+    public void updateTick(World world, BlockPos position, IBlockState state, Random random) {
+        if (!world.isRemote && state.getValue(POWERED) && !world.isBlockPowered(position)) {
+            world.setBlockState(position, state.withProperty(POWERED, Boolean.FALSE), 3);
+        }
+    }
+
     private void updatePoweredState(World world, BlockPos position, IBlockState state) {
         if (world.isRemote) return;
         boolean powered = world.isBlockPowered(position);
         if (powered != state.getValue(POWERED)) {
-            world.setBlockState(position, state.withProperty(POWERED, powered), 3);
+            if (state.getValue(POWERED)) {
+                world.scheduleUpdate(position, this, 4);
+            } else {
+                world.setBlockState(position, state.withProperty(POWERED, Boolean.TRUE), 3);
+            }
         }
     }
 }

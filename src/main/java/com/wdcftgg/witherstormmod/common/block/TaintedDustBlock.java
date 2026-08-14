@@ -39,7 +39,9 @@ public final class TaintedDustBlock extends Block {
 
     private static final Map<EnumFacing, PropertyEnum<WireConnection>> PROPERTY_BY_DIRECTION =
             new EnumMap<EnumFacing, PropertyEnum<WireConnection>>(EnumFacing.class);
-    private static final AxisAlignedBB SHAPE = new AxisAlignedBB(0.0D, 0.0D, 0.0D, 1.0D, 1.0D / 16.0D, 1.0D);
+    private static final double DOT_MIN = 3.0D / 16.0D;
+    private static final double DOT_MAX = 13.0D / 16.0D;
+    private static final double FLOOR_HEIGHT = 1.0D / 16.0D;
     private static final int COLOR = 0xFF40D6;
 
     static {
@@ -60,12 +62,22 @@ public final class TaintedDustBlock extends Block {
         setTranslationKey(name);
         setCreativeTab(ModCreativeTabs.MAIN);
         setHardness(0.0F);
-        setSoundType(SoundType.STONE);
+        setSoundType(SoundType.PLANT);
     }
 
     @Override
     public IBlockState getActualState(IBlockState state, IBlockAccess world, BlockPos position) {
         return getConnectionState(world, state, position);
+    }
+
+    @Override
+    public IBlockState getStateFromMeta(int metadata) {
+        return getDefaultState();
+    }
+
+    @Override
+    public int getMetaFromState(IBlockState state) {
+        return 0;
     }
 
     IBlockState getConnectionState(IBlockAccess world, IBlockState state, BlockPos position) {
@@ -105,11 +117,9 @@ public final class TaintedDustBlock extends Block {
         BlockPos adjacentPosition = position.offset(direction);
         IBlockState adjacentState = world.getBlockState(adjacentPosition);
         if (allowUpwardConnection && canSurviveOn(world, adjacentPosition, adjacentState)
-                && canConnectTo(world.getBlockState(adjacentPosition.up()))
-                && adjacentState.isSideSolid(world, adjacentPosition, direction.getOpposite())) {
-            return adjacentState.isNormalCube()
-                    ? WireConnection.UP
-                    : WireConnection.SIDE;
+                && canConnectTo(world.getBlockState(adjacentPosition.up()))) {
+            return adjacentState.isSideSolid(world, adjacentPosition, direction.getOpposite())
+                    ? WireConnection.UP : WireConnection.SIDE;
         }
         if (canConnectTo(adjacentState)
                 || !adjacentState.isNormalCube() && canConnectTo(world.getBlockState(adjacentPosition.down()))) {
@@ -185,7 +195,16 @@ public final class TaintedDustBlock extends Block {
 
     @Override
     public AxisAlignedBB getBoundingBox(IBlockState state, IBlockAccess world, BlockPos position) {
-        return SHAPE;
+        IBlockState actual = getActualState(state, world, position);
+        double minX = isConnected(actual.getValue(WEST)) ? 0.0D : DOT_MIN;
+        double maxX = isConnected(actual.getValue(EAST)) ? 1.0D : DOT_MAX;
+        double minZ = isConnected(actual.getValue(NORTH)) ? 0.0D : DOT_MIN;
+        double maxZ = isConnected(actual.getValue(SOUTH)) ? 1.0D : DOT_MAX;
+        double maxY = actual.getValue(NORTH) == WireConnection.UP
+                || actual.getValue(EAST) == WireConnection.UP
+                || actual.getValue(SOUTH) == WireConnection.UP
+                || actual.getValue(WEST) == WireConnection.UP ? 1.0D : FLOOR_HEIGHT;
+        return new AxisAlignedBB(minX, 0.0D, minZ, maxX, maxY, maxZ);
     }
 
     @Override
@@ -234,15 +253,33 @@ public final class TaintedDustBlock extends Block {
         IBlockState actual = getActualState(state, world, position);
         for (EnumFacing direction : EnumFacing.Plane.HORIZONTAL) {
             WireConnection attachment = actual.getValue(PROPERTY_BY_DIRECTION.get(direction));
-            if (attachment == WireConnection.NONE || random.nextFloat() >= 0.2F) continue;
-            double distance = 0.2D + random.nextDouble() * 0.3D;
-            double x = position.getX() + 0.5D + direction.getXOffset() * distance;
-            double y = position.getY() + (attachment == WireConnection.UP
-                    ? 0.2D + random.nextDouble() * 0.6D : 0.0625D);
-            double z = position.getZ() + 0.5D + direction.getZOffset() * distance;
-            world.spawnParticle(EnumParticleTypes.REDSTONE, x, y, z,
-                    1.0D, 64.0D / 255.0D, 214.0D / 255.0D);
+            switch (attachment) {
+                case UP:
+                    spawnParticlesAlongLine(world, random, position, direction, EnumFacing.UP, -0.5F, 0.5F);
+                case SIDE:
+                    spawnParticlesAlongLine(world, random, position, EnumFacing.DOWN, direction, 0.0F, 0.5F);
+                    continue;
+                default:
+                    spawnParticlesAlongLine(world, random, position, EnumFacing.DOWN, direction, 0.0F, 0.3F);
+            }
         }
+    }
+
+    @SideOnly(Side.CLIENT)
+    private static void spawnParticlesAlongLine(World world, Random random, BlockPos position,
+                                                EnumFacing edgeDirection, EnumFacing lineDirection,
+                                                float start, float end) {
+        float length = end - start;
+        if (random.nextFloat() >= 0.2F * length) return;
+        float offset = start + length * random.nextFloat();
+        double x = position.getX() + 0.5D + 0.4375D * edgeDirection.getXOffset()
+                + offset * lineDirection.getXOffset();
+        double y = position.getY() + 0.5D + 0.4375D * edgeDirection.getYOffset()
+                + offset * lineDirection.getYOffset();
+        double z = position.getZ() + 0.5D + 0.4375D * edgeDirection.getZOffset()
+                + offset * lineDirection.getZOffset();
+        world.spawnParticle(EnumParticleTypes.REDSTONE, x, y, z,
+                1.0D, 64.0D / 255.0D, 214.0D / 255.0D);
     }
 
     @SideOnly(Side.CLIENT)

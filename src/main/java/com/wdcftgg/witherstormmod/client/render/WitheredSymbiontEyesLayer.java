@@ -22,8 +22,9 @@ public final class WitheredSymbiontEyesLayer implements LayerRenderer<SickenedEn
         float previousBrightnessY = OpenGlHelper.lastBrightnessY;
         GlStateManager.enableBlend();
         GlStateManager.disableAlpha();
+        GlStateManager.disableCull();
         GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
-        GlStateManager.depthMask(!entity.isInvisible());
+        GlStateManager.depthMask(false);
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 61680.0F, 0.0F);
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         Minecraft.getMinecraft().entityRenderer.setupFogColor(true);
@@ -37,6 +38,9 @@ public final class WitheredSymbiontEyesLayer implements LayerRenderer<SickenedEn
             GlStateManager.depthMask(true);
             GlStateManager.disableBlend();
             GlStateManager.enableAlpha();
+            GlStateManager.enableCull();
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }

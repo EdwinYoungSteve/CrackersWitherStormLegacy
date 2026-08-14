@@ -2,10 +2,12 @@ package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
@@ -72,7 +74,7 @@ public final class AdvancementEvents {
             TileEntity tile = event.world.getTileEntity(pending.position);
             if (player == null || !(tile instanceof BellTileEntity)
                     || !hasRung((BellTileEntity) tile, pending)) continue;
-            WitherStormEntity storm = nearestStorm(event.world, player);
+            Entity storm = nearestStorm(event.world, player);
             if (storm != null) ModCriteriaTriggers.RING_BELL_NEAR_STORM.trigger(player, storm);
         }
     }
@@ -83,13 +85,14 @@ public final class AdvancementEvents {
         return bell.getRingingTicks() < pending.ringingTicks || bell.getRingingTicks() <= 1;
     }
 
-    private static WitherStormEntity nearestStorm(World world, EntityPlayerMP player) {
+    private static Entity nearestStorm(World world, EntityPlayerMP player) {
         AxisAlignedBB area = player.getEntityBoundingBox().grow(BELL_STORM_RANGE);
-        List<WitherStormEntity> storms = world.getEntitiesWithinAABB(
-                WitherStormEntity.class, area, storm -> !storm.isDead);
-        WitherStormEntity nearest = null;
+        List<Entity> storms = world.getEntitiesWithinAABB(Entity.class, area,
+                storm -> !storm.isDead && (storm instanceof WitherStormEntity
+                        || storm instanceof SupplementalEntities.WitherStormSegmentEntity));
+        Entity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
-        for (WitherStormEntity storm : storms) {
+        for (Entity storm : storms) {
             double distance = player.getDistanceSq(storm);
             if (distance < nearestDistance) {
                 nearest = storm;

@@ -155,10 +155,10 @@ public final class AmuletAnimationHelper {
         GlStateManager.translate(0.0F, -0.2F, -0.07F);
     }
 
-    private static void drawGlare(boolean rightSide, float scale,
-                                  double x, double sideOffset, double y,
-                                  float red, float green, float blue, float rotation,
-                                  int tickCount, float partialTicks, float intensity) {
+    public static void drawGlare(boolean rightSide, float scale,
+                                 double x, double sideOffset, double y,
+                                 float red, float green, float blue, float rotation,
+                                 int tickCount, float partialTicks, float intensity) {
         float alpha = getGlareAlpha(tickCount, rotation, partialTicks, intensity);
         if (alpha <= 0.0F) return;
 
@@ -269,7 +269,7 @@ public final class AmuletAnimationHelper {
     }
 
     static float getGlareAlpha(int tickCount, float rotation, float partialTicks, float intensity) {
-        return MathHelper.clamp(MathHelper.sin(
+        return MathHelper.clamp(MathHelper.cos(
                 (tickCount + rotation + partialTicks) * 0.2F) * intensity, 0.0F, 1.0F);
     }
 

@@ -1,17 +1,26 @@
 package com.wdcftgg.witherstormmod.common.entity;
 
+import com.wdcftgg.witherstormmod.api.common.ai.witherstorm.WitherStormWorldInteractions;
+import com.wdcftgg.witherstormmod.api.common.ai.witherstorm.clustersource.BlockClusterSource;
 import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
+import com.wdcftgg.witherstormmod.common.util.WorldUtil;
 import net.minecraft.block.Block;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.SoundCategory;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import net.minecraftforge.event.ForgeEventFactory;
 
 import javax.annotation.Nullable;
+import java.util.Random;
+import java.util.function.Consumer;
 
 /** 调度上游四类方块簇来源，并统一复用外部 JAR 中的方块标签。 */
 final class WitherStormClusterManager {
@@ -23,12 +32,73 @@ final class WitherStormClusterManager {
 
     void tick() {
         if (storm.world.isRemote || storm.isDeadOrPlayingDead()
-                || !storm.world.getGameRules().getBoolean("mobGriefing")) return;
-        for (Source source : Source.values()) {
-            if (!canUse(source) || storm.ticksExisted % getPickupInterval(source) != 0) continue;
-            int clusterCount = getClusterCount(source);
-            for (int index = 0; index < clusterCount; index++) createCluster(source);
+                || !ForgeEventFactory.getMobGriefingEvent(storm.world, storm)) return;
+        for (BlockClusterSource source
+                : WitherStormWorldInteractions.getInstance().getClusterSources()) {
+            source.tick(storm);
         }
+    }
+
+    /** 上游在大型阶段撞上方块时，会从随机碰撞面连续剥离十个方块簇。 */
+    void createCollisionClusters() {
+        if (storm.getPhase() <= 3) return;
+        createCollisionClusters(storm, storm::trackEntityToConsume);
+    }
+
+    static void createCollisionClusters(EntityLivingBase source,
+                                        Consumer<SupplementalEntities.BlockClusterEntity> tracker) {
+        if (source.world.isRemote
+                || (!source.collidedHorizontally && !source.collidedVertically)
+                || !ForgeEventFactory.getMobGriefingEvent(source.world, source)) return;
+        AxisAlignedBB bounds = source.getEntityBoundingBox();
+        Random random = source.getRNG();
+        for (int index = 0; index < 10; index++) {
+            EnumFacing direction = EnumFacing.values()[random.nextInt(EnumFacing.values().length)];
+            BlockPos center = getCollisionClusterPosition(bounds, direction, 2.0D, random);
+            SupplementalEntities.BlockClusterEntity cluster =
+                    new SupplementalEntities.BlockClusterEntity(source.world);
+            cluster.populateWithRadius(center, 3.0F + random.nextFloat() * 2.0F,
+                    (world, position, state) -> !isBlacklisted(state));
+            if (cluster.getBlocks().isEmpty()) continue;
+            cluster.setRotationDelta(random.nextInt(20) * 0.05F,
+                    random.nextInt(20) * 0.05F);
+            cluster.setNoGravity(true);
+            cluster.setPhysics(false);
+            cluster.setShakeTime(5);
+            if (source.world.spawnEntity(cluster)) {
+                tracker.accept(cluster);
+            } else {
+                cluster.place();
+            }
+        }
+    }
+
+    private static BlockPos getCollisionClusterPosition(AxisAlignedBB bounds, EnumFacing direction,
+                                                         double outsideOffset, Random random) {
+        double x = randomBetween(bounds.minX, bounds.maxX, random);
+        double y = randomBetween(bounds.minY, bounds.maxY, random);
+        double z = randomBetween(bounds.minZ, bounds.maxZ, random);
+        switch (direction.getAxis()) {
+            case X:
+                x = direction == EnumFacing.WEST ? bounds.minX - outsideOffset
+                        : bounds.maxX + outsideOffset;
+                break;
+            case Y:
+                y = direction == EnumFacing.DOWN ? bounds.minY - outsideOffset
+                        : bounds.maxY + outsideOffset;
+                break;
+            case Z:
+                z = direction == EnumFacing.NORTH ? bounds.minZ - outsideOffset
+                        : bounds.maxZ + outsideOffset;
+                break;
+            default:
+                break;
+        }
+        return new BlockPos(MathHelper.floor(x), MathHelper.floor(y), MathHelper.floor(z));
+    }
+
+    private static double randomBetween(double minimum, double maximum, Random random) {
+        return minimum + (maximum - minimum) * random.nextDouble();
     }
 
     @Nullable
@@ -37,7 +107,8 @@ final class WitherStormClusterManager {
                 Math.min(storm.world.getActualHeight() - 1,
                         MathHelper.floor(storm.posY + storm.getEyeHeight() + 1.0D)),
                 MathHelper.floor(storm.posZ));
-        return createCluster(source, searchCenter, Math.max(1, getSearchRadius(source)), true);
+        return createCluster(source, storm, searchCenter,
+                Math.max(1, getSearchRadius(source)), true);
     }
 
     @Nullable
@@ -47,23 +118,29 @@ final class WitherStormClusterManager {
                 Math.min(storm.world.getActualHeight() - 1,
                         MathHelper.floor(segment.posY + segment.getEyeHeight() + 1.0D)),
                 MathHelper.floor(segment.posZ));
-        return createCluster(Source.DEFAULT, searchCenter, 64, false);
+        return createCluster(Source.DEFAULT, segment, searchCenter, 64, false);
     }
 
     @Nullable
-    private SupplementalEntities.BlockClusterEntity createCluster(Source source, BlockPos searchCenter,
-                                                              int searchRadius, boolean trackForStorm) {
+    private SupplementalEntities.BlockClusterEntity createCluster(Source source,
+                                                                  EntityLivingBase clusterOwner,
+                                                                  BlockPos searchCenter,
+                                                                  int searchRadius,
+                                                                  boolean trackForStorm) {
+        Random random = clusterOwner.getRNG();
         float clusterRadius = getClusterRadius(source);
-        int shakeTime = getShakeTime(source);
+        int shakeTime = getShakeTime(source, random);
+        float rotationDeltaX = getRotationDelta(source, random);
+        float rotationDeltaY = getRotationDelta(source, random);
         boolean scanUpwards = source == Source.HUNCHBACK && shouldScanUpwards();
         for (int attempt = 0; attempt < source.maximumAttempts; attempt++) {
-            int randomX = storm.getRNG().nextInt(searchRadius * 2) - searchRadius;
-            int randomZ = storm.getRNG().nextInt(searchRadius * 2) - searchRadius;
+            int randomX = random.nextInt(searchRadius * 2) - searchRadius;
+            int randomZ = random.nextInt(searchRadius * 2) - searchRadius;
             if (Math.sqrt(randomX * randomX + randomZ * randomZ) >= searchRadius) continue;
             BlockPos candidate = searchCenter.add(randomX, 0, randomZ);
             if (!storm.world.isBlockLoaded(candidate)) break;
             IBlockState state = storm.world.getBlockState(candidate);
-            while (candidate.getY() > 0 && candidate.getY() < storm.world.getActualHeight() - 1
+            while (candidate.getY() > 0 && candidate.getY() < storm.world.getActualHeight()
                     && isAirOrWater(state)) {
                 candidate = scanUpwards ? candidate.up() : candidate.down();
                 state = storm.world.getBlockState(candidate);
@@ -74,7 +151,7 @@ final class WitherStormClusterManager {
                 IBlockState originalState = state;
                 int minimumY = candidate.getY();
                 int maximumDepthY = Math.max(0, minimumY - 10);
-                int randomY = maximumDepthY + storm.getRNG().nextInt(minimumY - maximumDepthY + 1);
+                int randomY = maximumDepthY + random.nextInt(minimumY - maximumDepthY + 1);
                 candidate = new BlockPos(candidate.getX(), randomY, candidate.getZ());
                 state = storm.world.getBlockState(candidate);
                 if (isAirOrWater(state) || isBlacklisted(state)) {
@@ -83,7 +160,7 @@ final class WitherStormClusterManager {
                 }
             }
 
-            if (isInvalidInitialBlock(source, state) || !isBlockExposed(candidate)
+            if (isInvalidInitialBlock(source, state) || !WorldUtil.isBlockExposed(storm.world, candidate)
                     || hasNearbySymbiont(candidate)) continue;
             final Source selectedSource = source;
             SupplementalEntities.BlockClusterEntity cluster = new SupplementalEntities.BlockClusterEntity(storm.world);
@@ -91,16 +168,21 @@ final class WitherStormClusterManager {
                     (world, position, blockState) -> isValidClusterBlock(selectedSource, blockState));
             int size = cluster.getBlocks().size();
             if (size <= 0) continue;
-            if (size >= 55 && storm.getRNG().nextInt(3) == 0) cluster.setShouldCrumble(true);
+            if (size >= 55 && random.nextInt(3) == 0) cluster.setShouldCrumble(true);
             cluster.setTime(50);
             cluster.setShakeTime(shakeTime);
-            cluster.setRotationDelta(getRotationDelta(source, true), getRotationDelta(source, false));
+            if (size >= 2) {
+                cluster.playSound(ModSounds.get("block_cluster_shake"), 2.0F,
+                        (random.nextFloat() - random.nextFloat()) * 0.2F + 1.0F);
+            }
+            cluster.setRotationDelta(rotationDeltaX, rotationDeltaY);
+            cluster.setRotateClockwise(random.nextBoolean());
             cluster.setNoGravity(true);
             cluster.setPhysics(false);
             cluster.setShouldNotCountToConsumedMass(source == Source.NATURE);
+            playBreakSound(source, candidate, state);
             if (storm.world.spawnEntity(cluster)) {
                 if (trackForStorm) storm.trackEntityToConsume(cluster);
-                playCreationSounds(source, candidate, state, size);
                 return cluster;
             }
             return null;
@@ -172,7 +254,8 @@ final class WitherStormClusterManager {
                 }
             case HUNCHBACK:
                 if (WitherStormConfig.constantBlackhole) return 1;
-                return Math.max(1, 60 - Math.round(storm.getConsumedMass() * 0.00375F));
+                return Math.max(1, WitherStormConfig.hunchbackClusterPickupInterval
+                        - Math.round(storm.getConsumedMass() * 0.00375F));
             default:
                 return 100;
         }
@@ -186,8 +269,8 @@ final class WitherStormClusterManager {
 
     private int getSearchRadius(Source source) {
         int phase = storm.getPhase();
-        int hunchbackRadius = Math.min(48, 12 + (int) Math.round(storm.getConsumedMass() * 0.00445D));
-        int consumptionRadius = phase > 3 ? 80 : hunchbackRadius;
+        int hunchbackRadius = storm.getHunchbackConsumptionRadius();
+        int consumptionRadius = storm.getEntityConsumptionRadius();
         switch (source) {
             case SMALL:
                 return consumptionRadius * (phase >= 5 ? 2 : 1);
@@ -200,40 +283,39 @@ final class WitherStormClusterManager {
         }
     }
 
-    private int getShakeTime(Source source) {
+    private int getShakeTime(Source source, Random random) {
         int phase = storm.getPhase();
         switch (source) {
             case DEFAULT:
-                return 20 + storm.getRNG().nextInt(10);
+                return 20 + random.nextInt(10);
             case SMALL:
                 return 0;
             case NATURE:
-                if (phase == 0) return 20 + storm.getRNG().nextInt(10);
-                if (phase == 1) return 15 + storm.getRNG().nextInt(10);
-                if (phase == 2) return 10 + storm.getRNG().nextInt(10);
-                if (phase == 3) return 5 + storm.getRNG().nextInt(5);
+                if (phase == 0) return 20 + random.nextInt(10);
+                if (phase == 1) return 15 + random.nextInt(10);
+                if (phase == 2) return 10 + random.nextInt(10);
+                if (phase == 3) return 5 + random.nextInt(5);
                 return 0;
             case HUNCHBACK:
                 int fastThreshold = (int) (15000 * storm.getEvolutionSpeedModifier());
                 int mediumThreshold = (int) (10000 * storm.getEvolutionSpeedModifier());
                 if (storm.getConsumedMass() >= fastThreshold) return 0;
                 return storm.getConsumedMass() >= mediumThreshold
-                        ? storm.getRNG().nextInt(10) : storm.getRNG().nextInt(40);
+                        ? random.nextInt(10) : random.nextInt(40);
             default:
                 return 0;
         }
     }
 
-    private float getRotationDelta(Source source, boolean pitch) {
-        if (source == Source.DEFAULT) return storm.getRNG().nextInt(20) * 0.05F;
-        float multiplier = storm.getConsumedMass() < 10000 ? 0.125F : 0.75F;
-        return (storm.getRNG().nextInt(20) - 10) * multiplier;
+    private float getRotationDelta(Source source, Random random) {
+        if (source == Source.DEFAULT) return random.nextInt(20) * 0.05F;
+        int fastRotationThreshold = storm.adjustAmountForEvolutionSpeed(10000);
+        float multiplier = storm.getConsumedMass() < fastRotationThreshold ? 0.125F : 0.75F;
+        return (random.nextInt(20) - 10) * multiplier;
     }
 
     private boolean shouldSpeedUp() {
-        if (storm.getPhase() < 4 || !storm.isUltimateTargetStationary() || storm.isDistracted()) return false;
-        net.minecraft.util.math.Vec3d target = storm.getUltimateTargetPos();
-        return target != null && storm.getPositionVector().distanceTo(target) > 122.0D;
+        return storm.shouldSpeedUp();
     }
 
     private boolean shouldScanUpwards() {
@@ -267,17 +349,8 @@ final class WitherStormClusterManager {
         return true;
     }
 
-    private boolean isBlacklisted(IBlockState state) {
+    private static boolean isBlacklisted(IBlockState state) {
         return UpstreamBlockTags.contains(UpstreamBlockTags.WITHER_STORM_BLOCK_BLACKLIST, state);
-    }
-
-    private boolean isBlockExposed(BlockPos position) {
-        IBlockState state = storm.world.getBlockState(position);
-        if (isAirOrWater(state)) return false;
-        for (net.minecraft.util.EnumFacing facing : net.minecraft.util.EnumFacing.values()) {
-            if (isAirOrWater(storm.world.getBlockState(position.offset(facing)))) return true;
-        }
-        return false;
     }
 
     private boolean hasNearbySymbiont(BlockPos position) {
@@ -291,14 +364,9 @@ final class WitherStormClusterManager {
         return block == Blocks.AIR || block == Blocks.WATER || block == Blocks.FLOWING_WATER;
     }
 
-    private void playCreationSounds(Source source, BlockPos position, IBlockState state, int size) {
-        if (size >= 2) {
-            storm.world.playSound(null, position, ModSounds.get("block_cluster_shake"),
-                    SoundCategory.BLOCKS, 2.0F,
-                    (storm.getRNG().nextFloat() - storm.getRNG().nextFloat()) * 0.2F + 1.0F);
-        }
+    private void playBreakSound(Source source, BlockPos position, IBlockState state) {
         if (source == Source.DEFAULT) return;
-        SoundType sound = state.getBlock().getSoundType(state, storm.world, position, storm);
+        SoundType sound = state.getBlock().getSoundType(state, storm.world, position, null);
         storm.world.playSound(null, position, sound.getBreakSound(), SoundCategory.BLOCKS,
                 (sound.getVolume() + 1.0F) / 2.0F, sound.getPitch() * 0.8F);
     }

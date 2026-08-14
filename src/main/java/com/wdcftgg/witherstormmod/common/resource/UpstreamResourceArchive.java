@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,7 @@ import java.util.zip.ZipException;
 public final class UpstreamResourceArchive {
 
     private static volatile File archiveFile;
-    private static volatile List<String> entryNames = List.of();
+    private static volatile List<String> entryNames = Collections.emptyList();
     private static final Map<String, byte[]> ENTRY_CACHE = new ConcurrentHashMap<>();
 
     private UpstreamResourceArchive() {
@@ -30,7 +31,7 @@ public final class UpstreamResourceArchive {
         initializeArchive(new File(resourcePackDirectory, WitherStormMod.UPSTREAM_RESOURCEPACK_NAME));
     }
 
-    static synchronized void initializeArchive(File candidate) throws IOException {
+    public static synchronized void initializeArchive(File candidate) throws IOException {
         File canonical = candidate.getCanonicalFile();
         if (!canonical.isFile()) {
             throw new IOException("Required external resource pack is missing: " + canonical.getAbsolutePath());
@@ -81,7 +82,7 @@ public final class UpstreamResourceArchive {
                 names.add(name);
             }
         }
-        return List.copyOf(names);
+        return Collections.unmodifiableList(names);
     }
 
     private static List<String> validate(File file) throws IOException {
@@ -95,10 +96,12 @@ public final class UpstreamResourceArchive {
                     || archive.getEntry("pack.mcmeta") == null
                     || archive.getEntry("assets/witherstormmod/sounds.json") == null
                     || archive.getEntry("assets/witherstormmod/particles/command_block.json") == null
+                    || archive.getEntry("assets/witherstormmod/particles/tractor_beam.json") == null
                     || archive.getEntry("assets/witherstormmod/textures/particle/command_block.png") == null
                     || archive.getEntry("assets/witherstormmod/textures/particle/command_block_1.png") == null
                     || archive.getEntry("assets/witherstormmod/textures/particle/command_block_2.png") == null
                     || archive.getEntry("assets/witherstormmod/textures/particle/command_block_3.png") == null
+                    || archive.getEntry("assets/witherstormmod/textures/particle/tractor_beam.png") == null
                     || archive.getEntry("assets/witherstormmod/lang/en_us.json") == null
                     || archive.getEntry("data/witherstormmod/structures/bowels_podium.nbt") == null) {
                 throw new IOException("The external archive is not witherstormmod 4.2.1: " + file.getAbsolutePath());
@@ -120,7 +123,7 @@ public final class UpstreamResourceArchive {
                     names.add(entry.getName());
                 }
             }
-            return List.copyOf(names);
+            return Collections.unmodifiableList(names);
         } catch (ZipException exception) {
             throw new IOException("Required external resource pack is not a valid ZIP/JAR: "
                     + file.getAbsolutePath(), exception);

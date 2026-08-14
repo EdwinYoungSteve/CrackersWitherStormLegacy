@@ -58,9 +58,4 @@ public final class TaintedPumpkinBlock extends Block {
         return clickedFace.getAxis() == EnumFacing.Axis.Y ? playerFacing.getOpposite() : clickedFace;
     }
 
-    @Override
-    public boolean canPlaceBlockAt(World world, BlockPos position) {
-        return world.getBlockState(position).getBlock().isReplaceable(world, position)
-                && world.isSideSolid(position.down(), EnumFacing.UP);
-    }
 }

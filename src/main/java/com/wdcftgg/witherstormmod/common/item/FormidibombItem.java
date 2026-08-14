@@ -1,5 +1,7 @@
 package com.wdcftgg.witherstormmod.common.item;
 
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
+import com.wdcftgg.witherstormmod.common.entity.FormidibombExplosion;
 import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
 import com.wdcftgg.witherstormmod.common.tile.FormidibombTileEntity;
 import net.minecraft.block.Block;
@@ -8,18 +10,21 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemBlock;
+import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.item.EnumRarity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 
+import javax.annotation.Nullable;
+import java.util.List;
+
 public class FormidibombItem extends RarityBlockItem {
-    private static final int DEFAULT_FUSE = 12000;
-    private static final int DROP_THRESHOLD = DEFAULT_FUSE / 4;
 
     public FormidibombItem(Block block) {
         super(block, EnumRarity.EPIC);
@@ -28,7 +33,7 @@ public class FormidibombItem extends RarityBlockItem {
 
     @Override
     public void onCreated(ItemStack stack, World world, EntityPlayer player) {
-        setFuse(stack, DEFAULT_FUSE);
+        setFuse(stack, WitherStormConfig.craftFuseTicks);
     }
 
     @Override
@@ -43,15 +48,21 @@ public class FormidibombItem extends RarityBlockItem {
     }
 
     private void tickFuse(ItemStack stack, World world, Entity holder, BlockPos position) {
-        if (world.isRemote) return;
-        ensureFuse(stack);
-        int fuse = getFuse(stack) - 1;
-        stack.getOrCreateSubCompound("WitherStormMod").setInteger("Fuse", fuse);
         int startFuse = getStartFuse(stack);
-        if (fuse <= 0) {
-            spawnBomb(stack, world, holder, position, 1);
-        } else if (holder instanceof EntityLivingBase && fuse <= Math.max(1, startFuse / 4)) {
+        if (world.isRemote || startFuse <= 0) return;
+        int fuse = getFuse(stack);
+        if (WitherStormConfig.formidibombFuseEnabled) {
+            --fuse;
+            stack.getOrCreateSubCompound("WitherStormMod").setInteger("Fuse", fuse);
+        }
+        if (WitherStormConfig.shouldDropFromInventory
+                && fuse <= startFuse / Math.max(1, WitherStormConfig.dropInterval)) {
             spawnBomb(stack, world, holder, position, fuse);
+        }
+        if (fuse <= 0) {
+            stack.shrink(1);
+            FormidibombExplosion.explode(world, holder, 48 + world.rand.nextInt(9), 3,
+                    position.getX(), position.getY(), position.getZ());
         }
     }
 
@@ -75,14 +86,9 @@ public class FormidibombItem extends RarityBlockItem {
         if (!super.placeBlockAt(stack, player, world, pos, side, hitX, hitY, hitZ, newState)) return false;
         TileEntity tile = world.getTileEntity(pos);
         if (tile instanceof FormidibombTileEntity) {
-            ensureFuse(stack);
             ((FormidibombTileEntity) tile).setFuse(getFuse(stack), getStartFuse(stack), player);
         }
         return true;
-    }
-
-    private static void ensureFuse(ItemStack stack) {
-        if (getStartFuse(stack) <= 0) setFuse(stack, DEFAULT_FUSE);
     }
 
     public static int getFuse(ItemStack stack) {
@@ -94,8 +100,12 @@ public class FormidibombItem extends RarityBlockItem {
     }
 
     public static void setFuse(ItemStack stack, int fuse) {
+        setFuseState(stack, fuse, fuse);
+    }
+
+    public static void setFuseState(ItemStack stack, int fuse, int startFuse) {
         stack.getOrCreateSubCompound("WitherStormMod").setInteger("Fuse", fuse);
-        stack.getOrCreateSubCompound("WitherStormMod").setInteger("StartFuse", fuse);
+        stack.getOrCreateSubCompound("WitherStormMod").setInteger("StartFuse", startFuse);
     }
 
     @Override
@@ -106,6 +116,25 @@ public class FormidibombItem extends RarityBlockItem {
     @Override
     public double getDurabilityForDisplay(ItemStack stack) {
         return 1.0D - getFuse(stack) / (double) Math.max(1, getStartFuse(stack));
+    }
+
+    @Override
+    public int getRGBDurabilityForDisplay(ItemStack stack) {
+        int fuse = getFuse(stack);
+        int startFuse = getStartFuse(stack);
+        int pulse = fuse > 0 ? startFuse / fuse : 0;
+        return pulse % 2 == 0 ? 12718080 : 10027161;
+    }
+
+    @Override
+    public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, ITooltipFlag flag) {
+        int fuse = getFuse(stack);
+        int startFuse = getStartFuse(stack);
+        if (startFuse > 0 && fuse < startFuse) {
+            TextFormatting color = fuse / 10 % 2 == 0 ? TextFormatting.RED : TextFormatting.DARK_PURPLE;
+            tooltip.add(color + new TextComponentTranslation(
+                    "description.formidibomb.fuse", Math.max(0, fuse) / 20).getFormattedText());
+        }
     }
 
     @Override

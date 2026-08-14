@@ -2,10 +2,16 @@ package com.wdcftgg.witherstormmod.client.particle;
 
 import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.common.entity.PowerfulExplosiveEntity;
+import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
+import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
@@ -27,6 +33,7 @@ public final class CommandBlockParticle extends Particle {
             new ResourceLocation(Tags.MOD_ID, "particle/command_block_2"),
             new ResourceLocation(Tags.MOD_ID, "particle/command_block_3")
     };
+    private final TextureAtlasSprite[] sprites;
 
     private CommandBlockParticle(World world, double x, double y, double z,
                                        double motionX, double motionY, double motionZ,
@@ -36,12 +43,38 @@ public final class CommandBlockParticle extends Particle {
         this.motionY = motionY;
         this.motionZ = motionZ;
         this.particleMaxAge = 10 + this.rand.nextInt(12);
-        this.particleGravity = 0.03F;
+        this.particleGravity = 0.0F;
+        // 1.12 multiplies particleScale by 0.1 while building the quad;
+        // upstream 1.20 uses 0.03 directly as the quad half-size.
+        this.particleScale = 0.3F;
         this.canCollide = false;
+        this.sprites = sprites;
         this.setParticleTexture(sprites[this.rand.nextInt(sprites.length)]);
     }
 
-    /** 在方块图集中注册上游四张独立的动画贴图。 */
+    @Override
+    public void onUpdate() {
+        super.onUpdate();
+        if (!isExpired && sprites.length > 0) {
+            int frame = Math.min(sprites.length - 1,
+                    particleAge * (sprites.length - 1) / Math.max(1, particleMaxAge));
+            setParticleTexture(sprites[frame]);
+            if (particleAge > particleMaxAge / 2) {
+                setAlphaF(Math.max(0.0F,
+                        1.0F - (float) (particleAge - particleMaxAge / 2) / particleMaxAge));
+            }
+        }
+        motionX *= 0.9285714286D;
+        motionY *= 0.9285714286D;
+        motionZ *= 0.9285714286D;
+    }
+
+    @Override
+    public int getBrightnessForRender(float partialTick) {
+        return 15728880;
+    }
+
+    /** 注册上游的四个 sprite；每个 sprite 自身仍由外部 .mcmeta 驱动 1x4 插值动画。 */
     public static void registerSprites(TextureMap textureMap) {
         for (ResourceLocation location : SPRITE_LOCATIONS) {
             textureMap.registerSprite(location);
@@ -76,6 +109,107 @@ public final class CommandBlockParticle extends Particle {
         }
     }
 
+    /** 为共生体龙息弹重建上游的命令方块轨迹粒子。 */
+    public static void spawnForSymbiontDragonFireball(Entity fireball) {
+        if (fireball == null || fireball.world == null || !fireball.world.isRemote || fireball.isDead) return;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+        minecraft.effectRenderer.addEffect(new CommandBlockParticle(fireball.world,
+                fireball.posX, fireball.posY + 0.5D, fireball.posZ,
+                0.0D, 0.0D, 0.0D, sprites));
+    }
+
+    /** Upstream WitheredSymbiontEntity emits five command-block particles while casting. */
+    public static void spawnForSymbiont(SickenedEntities.WitheredSymbiontEntity symbiont) {
+        if (symbiont == null || symbiont.world == null || !symbiont.world.isRemote
+                || symbiont.isDead || (!symbiont.isCastingSpell() && !symbiont.isSummoningMobs())) return;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+        Random random = symbiont.world.rand;
+        Vec3d eyePosition = symbiont.getPositionEyes(1.0F);
+        for (int i = 0; i < 5; i++) {
+            double x = symbiont.posX + random.nextGaussian() * 2.0D;
+            double y = symbiont.posY + symbiont.getEyeHeight() + random.nextGaussian() * 2.0D;
+            double z = symbiont.posZ + random.nextGaussian() * 2.0D;
+            Vec3d delta = eyePosition.subtract(x, y, z);
+            if (delta.lengthSquared() > 1.0E-6D) delta = delta.normalize().scale(0.2D);
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(symbiont.world,
+                    x, y, z, delta.x, delta.y, delta.z, sprites));
+        }
+    }
+
+    /** 对应上游 ParticleEvents：掉落的命令方块书/工具持续冒出命令方块粒子。 */
+    public static void spawnForItemEntity(EntityItem item) {
+        if (item == null || item.world == null || !item.world.isRemote || item.isDead) return;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+        Random random = item.world.rand;
+        for (int i = 0; i < 2; i++) {
+            double x = item.posX + random.nextFloat() * 0.4D;
+            double y = item.posY + random.nextFloat() * 0.4D;
+            double z = item.posZ + random.nextFloat() * 0.4D;
+            Vec3d velocity = item.getLook(1.0F).subtract(x, y, z).normalize().scale(0.05D);
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(item.world,
+                    x, y, z, velocity.x, velocity.y, velocity.z, sprites));
+        }
+    }
+
+    /** 重建上游 Formidibomb 方块随机显示 tick 的六颗恒速粒子。 */
+    public static void spawnForBlock(World world, BlockPos position, Random random) {
+        if (world == null || !world.isRemote || position == null || random == null) return;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+        for (int i = 0; i < 6; i++) {
+            Vec3d offset = sampleOffset(random, 3.0F);
+            Vec3d velocity = offset.scale(-0.1D);
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(world,
+                    position.getX() + offset.x, position.getY() + offset.y,
+                    position.getZ() + offset.z, velocity.x, velocity.y, velocity.z, sprites));
+        }
+    }
+
+    /** 每收到一个服务端核心 tick 事件，仅生成该 tick 对应的一批粒子。 */
+    public static void spawnForCommandBlock(SupplementalEntities.CommandBlockEntity commandBlock,
+                                            double particleSpeed, int luringPlayerId) {
+        if (commandBlock == null || commandBlock.world == null || !commandBlock.world.isRemote
+                || commandBlock.isDead) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getMinecraft();
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+
+        Random random = commandBlock.world.rand;
+        double speed = Math.max(0.0D, particleSpeed) * 0.1D;
+        for (int i = 0; i < 5; i++) {
+            Vec3d offset = new Vec3d(random.nextGaussian(), random.nextGaussian(), random.nextGaussian());
+            Vec3d velocity = offset.scale(-1.0D)
+                    .normalize().scale(speed);
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(commandBlock.world,
+                    commandBlock.posX + offset.x,
+                    commandBlock.posY + commandBlock.getEyeHeight() + offset.y,
+                    commandBlock.posZ + offset.z, velocity.x, velocity.y, velocity.z, sprites));
+        }
+
+        Entity entity = commandBlock.world.getEntityByID(luringPlayerId);
+        if (!(entity instanceof EntityPlayer) || entity.isDead) return;
+        EntityPlayer player = (EntityPlayer) entity;
+        for (int i = 0; i < 4; i++) {
+            double x = player.posX + random.nextGaussian() * player.width * 0.4D;
+            double y = player.getEntityBoundingBox().minY + random.nextGaussian() * player.height * 0.4D;
+            double z = player.posZ + random.nextGaussian() * player.width * 0.4D;
+            Vec3d velocity = new Vec3d(commandBlock.posX - x,
+                    commandBlock.posY + commandBlock.getEyeHeight() - y, commandBlock.posZ - z)
+                    .normalize().scale(0.1D);
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(commandBlock.world,
+                    x, y, z, velocity.x, velocity.y, velocity.z, sprites));
+        }
+    }
+
     /** 上游复活仪式每 tick 在命令方块周围生成一颗向中心收拢的粒子。 */
     public static void spawnForSuperBeacon(World world, BlockPos beaconPos, Random random) {
         if (world == null || !world.isRemote || beaconPos == null || random == null) return;
@@ -83,9 +217,9 @@ public final class CommandBlockParticle extends Particle {
         TextureAtlasSprite[] sprites = resolveSprites(minecraft);
         if (sprites == null) return;
 
-        double targetX = beaconPos.getX() + 0.5D;
+        double targetX = beaconPos.getX();
         double targetY = beaconPos.getY() + 3.0D;
-        double targetZ = beaconPos.getZ() + 0.5D;
+        double targetZ = beaconPos.getZ();
         double x = targetX + random.nextGaussian();
         double y = targetY + random.nextGaussian();
         double z = targetZ + random.nextGaussian();
@@ -106,7 +240,7 @@ public final class CommandBlockParticle extends Particle {
         Vec3d commandCenter = getSuperBeaconBurstCenter(beaconPos, type, true);
         Random random = world.rand;
         for (int i = 0; i < 20; i++) {
-            world.spawnParticle(EnumParticleTypes.SMOKE_NORMAL,
+            world.spawnParticle(EnumParticleTypes.SMOKE_LARGE,
                     smokeCenter.x + random.nextGaussian(), smokeCenter.y + random.nextGaussian(),
                     smokeCenter.z + random.nextGaussian(), random.nextGaussian() * 0.01D,
                     random.nextGaussian() * 0.01D, random.nextGaussian() * 0.01D);
@@ -119,11 +253,48 @@ public final class CommandBlockParticle extends Particle {
         }
     }
 
+    /** 重建服务端命令方块粒子包，支持原版粒子包的高斯分布和受击均匀速度。 */
+    public static void spawnBurst(Vec3d center, int count,
+                                  double spreadX, double spreadY, double spreadZ,
+                                  double speed, int distribution) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        World world = minecraft.world;
+        if (world == null || center == null || count <= 0) return;
+        TextureAtlasSprite[] sprites = resolveSprites(minecraft);
+        if (sprites == null) return;
+        Random random = world.rand;
+        for (int index = 0; index < count; index++) {
+            double x = center.x;
+            double y = center.y;
+            double z = center.z;
+            double velocityX;
+            double velocityY;
+            double velocityZ;
+            if (distribution == ModNetwork.COMMAND_BLOCK_PARTICLES_EXACT_VELOCITY) {
+                velocityX = spreadX * speed;
+                velocityY = spreadY * speed;
+                velocityZ = spreadZ * speed;
+            } else if (distribution == ModNetwork.COMMAND_BLOCK_PARTICLES_UNIFORM_VELOCITY) {
+                velocityX = (random.nextFloat() - 0.5F) * speed;
+                velocityY = (random.nextFloat() - 0.5F) * speed;
+                velocityZ = (random.nextFloat() - 0.5F) * speed;
+            } else {
+                x += random.nextGaussian() * spreadX;
+                y += random.nextGaussian() * spreadY;
+                z += random.nextGaussian() * spreadZ;
+                velocityX = random.nextGaussian() * speed;
+                velocityY = random.nextGaussian() * speed;
+                velocityZ = random.nextGaussian() * speed;
+            }
+            minecraft.effectRenderer.addEffect(new CommandBlockParticle(world,
+                    x, y, z, velocityX, velocityY, velocityZ, sprites));
+        }
+    }
+
     static Vec3d getSuperBeaconBurstCenter(BlockPos beaconPos, int type, boolean commandBlockParticle) {
         boolean itemCraft = type == SUPER_BEACON_ITEM_BURST;
-        double yOffset = itemCraft ? 2.5D : commandBlockParticle ? 3.5D : 0.5D;
-        return new Vec3d(beaconPos.getX() + 0.5D, beaconPos.getY() + yOffset,
-                beaconPos.getZ() + 0.5D);
+        double yOffset = itemCraft ? 2.0D : commandBlockParticle ? 3.0D : 0.0D;
+        return new Vec3d(beaconPos.getX(), beaconPos.getY() + yOffset, beaconPos.getZ());
     }
 
     private static TextureAtlasSprite[] resolveSprites(Minecraft minecraft) {

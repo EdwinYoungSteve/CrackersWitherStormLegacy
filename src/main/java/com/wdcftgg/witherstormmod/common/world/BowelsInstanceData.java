@@ -4,6 +4,11 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.storage.WorldSavedData;
 
 import javax.annotation.Nullable;
@@ -13,6 +18,7 @@ import java.util.UUID;
 
 public class BowelsInstanceData extends WorldSavedData {
     public static final String DATA_NAME = "witherstormmod_bowels_instances";
+    public static final int CURRENT_COORDINATE_VERSION = 1;
     private final List<Instance> instances = new ArrayList<>();
 
     public BowelsInstanceData() {
@@ -43,6 +49,23 @@ public class BowelsInstanceData extends WorldSavedData {
         instances.add(instance);
         markDirty();
         return instance;
+    }
+
+    /**
+     * 对应上游 WitherStormBowelsManager.getAvailableStructure 的结构生成检查：
+     * 世界禁用结构生成时向全体玩家发红色警告并拒绝访问肠道。
+     */
+    public static boolean checkStructuresEnabled(World world) {
+        if (world.getWorldInfo().isMapFeaturesEnabled()) return true;
+        MinecraftServer server = world.getMinecraftServer();
+        if (server != null) {
+            for (EntityPlayerMP player : server.getPlayerList().getPlayers()) {
+                player.sendMessage(new TextComponentTranslation(
+                        "chat.witherstormmod.bowels.structuresDisabled")
+                        .setStyle(new Style().setColor(TextFormatting.RED)));
+            }
+        }
+        return false;
     }
 
     @Nullable
@@ -84,11 +107,16 @@ public class BowelsInstanceData extends WorldSavedData {
         public final int originDimension;
         public final BlockPos origin;
         public UUID commandBlockUuid;
+        public final UUID[] arenaHeadUuids = new UUID[2];
+        public final List<UUID> arenaTentacleUuids = new ArrayList<>();
+        public int arenaTentacleTargetCount;
+        public UUID killerUuid;
         public boolean prepared;
         public boolean completed;
         public int bossPhase;
         public int bossPhaseTicks;
         public BlockPos arenaPosition;
+        private int coordinateVersion = CURRENT_COORDINATE_VERSION;
 
         private Instance(UUID stormUuid, BlockPos center, int originDimension, BlockPos origin) {
             this.stormUuid = stormUuid;
@@ -104,10 +132,23 @@ public class BowelsInstanceData extends WorldSavedData {
             tag.setInteger("OriginDimension", originDimension);
             tag.setLong("Origin", origin.toLong());
             if (commandBlockUuid != null) tag.setUniqueId("CommandBlock", commandBlockUuid);
+            for (int index = 0; index < arenaHeadUuids.length; index++) {
+                if (arenaHeadUuids[index] != null) tag.setUniqueId("ArenaHead" + index, arenaHeadUuids[index]);
+            }
+            NBTTagList tentacles = new NBTTagList();
+            for (UUID uuid : arenaTentacleUuids) {
+                NBTTagCompound entry = new NBTTagCompound();
+                entry.setUniqueId("UUID", uuid);
+                tentacles.appendTag(entry);
+            }
+            tag.setTag("ArenaTentacles", tentacles);
+            tag.setInteger("ArenaTentacleTargetCount", arenaTentacleTargetCount);
+            if (killerUuid != null) tag.setUniqueId("Killer", killerUuid);
             tag.setBoolean("Prepared", prepared);
             tag.setBoolean("Completed", completed);
             tag.setInteger("BossPhase", bossPhase);
             tag.setInteger("BossPhaseTicks", bossPhaseTicks);
+            tag.setInteger("CoordinateVersion", coordinateVersion);
             if (arenaPosition != null) tag.setLong("ArenaPosition", arenaPosition.toLong());
             return tag;
         }
@@ -116,18 +157,55 @@ public class BowelsInstanceData extends WorldSavedData {
             Instance instance = new Instance(tag.getUniqueId("Storm"), BlockPos.fromLong(tag.getLong("Center")),
                     tag.getInteger("OriginDimension"), BlockPos.fromLong(tag.getLong("Origin")));
             if (tag.hasUniqueId("CommandBlock")) instance.commandBlockUuid = tag.getUniqueId("CommandBlock");
+            for (int index = 0; index < instance.arenaHeadUuids.length; index++) {
+                if (tag.hasUniqueId("ArenaHead" + index)) {
+                    instance.arenaHeadUuids[index] = tag.getUniqueId("ArenaHead" + index);
+                }
+            }
+            NBTTagList tentacles = tag.getTagList("ArenaTentacles", 10);
+            for (int index = 0; index < tentacles.tagCount(); index++) {
+                NBTTagCompound entry = tentacles.getCompoundTagAt(index);
+                if (entry.hasUniqueId("UUID")) instance.arenaTentacleUuids.add(entry.getUniqueId("UUID"));
+            }
+            instance.arenaTentacleTargetCount = tag.hasKey("ArenaTentacleTargetCount", 3)
+                    ? tag.getInteger("ArenaTentacleTargetCount") : instance.arenaTentacleUuids.size();
+            if (tag.hasUniqueId("Killer")) instance.killerUuid = tag.getUniqueId("Killer");
             instance.prepared = tag.getBoolean("Prepared");
             instance.completed = tag.getBoolean("Completed");
             instance.bossPhase = tag.getInteger("BossPhase");
             instance.bossPhaseTicks = tag.getInteger("BossPhaseTicks");
+            instance.coordinateVersion = tag.hasKey("CoordinateVersion", 3)
+                    ? tag.getInteger("CoordinateVersion") : 0;
             instance.arenaPosition = tag.hasKey("ArenaPosition", 4)
                     ? BlockPos.fromLong(tag.getLong("ArenaPosition")) : null;
             return instance;
         }
 
+        /** The generated network is anchored at Y=96, while upstream arena offsets use a Y=0 center. */
+        public BlockPos getStructureCenter() {
+            return new BlockPos(center.getX(), 0, center.getZ());
+        }
+
         public BlockPos getArenaPosition() {
-            if (arenaPosition == null) arenaPosition = center.add(-3, 110, 0);
-            return arenaPosition;
+            int x = arenaPosition == null ? center.getX() - 3 : arenaPosition.getX();
+            int z = arenaPosition == null ? center.getZ() : arenaPosition.getZ();
+            return new BlockPos(x, 110, z);
+        }
+
+        public boolean needsCoordinateMigration() {
+            return coordinateVersion < CURRENT_COORDINATE_VERSION
+                    || arenaPosition != null && center.getY() != 0
+                    && arenaPosition.getY() == center.getY() + 110;
+        }
+
+        public BlockPos getLegacyArenaPosition() {
+            if (arenaPosition != null && needsCoordinateMigration()) return arenaPosition;
+            return center.add(-3, 110, 0);
+        }
+
+        public void finishCoordinateMigration() {
+            arenaPosition = getArenaPosition();
+            coordinateVersion = CURRENT_COORDINATE_VERSION;
         }
     }
 }

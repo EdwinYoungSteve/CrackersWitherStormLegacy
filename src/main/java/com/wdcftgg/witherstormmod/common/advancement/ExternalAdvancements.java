@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.common.advancement;
 
+import com.wdcftgg.witherstormmod.Tags;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.wdcftgg.witherstormmod.WitherStormMod;
@@ -20,6 +21,8 @@ import java.util.Map;
 
 public final class ExternalAdvancements {
 
+    private static final int EXPECTED_ADVANCEMENT_COUNT = 66;
+
     private ExternalAdvancements() {
     }
 
@@ -37,9 +40,27 @@ public final class ExternalAdvancements {
             try (InputStream source = UpstreamResourceArchive.open(entryName)) {
                 converted = AdvancementResourceConverter.convert(entryName, source);
             }
-            File target = new File(new File(advancementDirectory, "witherstormmod"), relativeName);
+            File target = new File(new File(advancementDirectory, Tags.MOD_ID), relativeName);
             generated.put(target, new GeneratedAdvancement(entryName,
                     AdvancementResourceConverter.serialize(converted)));
+        }
+        for (String entryName : UpstreamResourceArchive.listEntries(
+                AdvancementResourceConverter.ADVANCEMENT_PREFIX, ".json")) {
+            String relativeName = entryName.substring(
+                    AdvancementResourceConverter.ADVANCEMENT_PREFIX.length());
+            if (!relativeName.startsWith("recipes/")) continue;
+            JsonObject converted;
+            try (InputStream source = UpstreamResourceArchive.open(entryName)) {
+                converted = AdvancementResourceConverter.convertRecipeAdvancement(entryName, source);
+            }
+            if (converted == null) continue;
+            File target = new File(new File(advancementDirectory, Tags.MOD_ID), relativeName);
+            generated.put(target, new GeneratedAdvancement(entryName,
+                    AdvancementResourceConverter.serialize(converted)));
+        }
+        if (generated.size() != EXPECTED_ADVANCEMENT_COUNT) {
+            throw new IOException("Expected " + EXPECTED_ADVANCEMENT_COUNT
+                    + " external advancements but prepared " + generated.size());
         }
 
         for (Map.Entry<File, GeneratedAdvancement> entry : generated.entrySet()) {

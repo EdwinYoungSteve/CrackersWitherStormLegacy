@@ -1,7 +1,9 @@
 package com.wdcftgg.witherstormmod.common.block;
 
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
+import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import net.minecraft.block.BlockBush;
+import net.minecraft.block.BlockDirt;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -35,7 +37,11 @@ public class TaintedMushroomBlock extends BlockBush {
     @Override
     public boolean canBlockStay(World world, BlockPos pos, IBlockState state) {
         IBlockState soil = world.getBlockState(pos.down());
-        return soil.getBlock() == Blocks.MYCELIUM
+        return soil.getBlock() == ModBlocks.get("tainted_flesh_block")
+                || soil.getBlock() == ModBlocks.get("infected_flesh_block")
+                || soil.getBlock() == Blocks.MYCELIUM
+                || soil.getBlock() == Blocks.DIRT
+                && soil.getValue(BlockDirt.VARIANT) == BlockDirt.DirtType.PODZOL
                 || world.getLightFromNeighbors(pos) < 13
                 && soil.getBlock().canSustainPlant(soil, world, pos.down(), net.minecraft.util.EnumFacing.UP, this);
     }

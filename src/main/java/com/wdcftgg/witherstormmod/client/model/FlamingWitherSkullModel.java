@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.client.model;
 
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.entity.Entity;
@@ -18,14 +19,18 @@ public class FlamingWitherSkullModel extends ModelBase {
         head.setRotationPoint(0.0F, -3.5F, 0.0F);
 
         flame = new ModelRenderer(this, 0, 24);
-        flame.addBox(-4.0F, -8.0F, 4.0F, 8, 0, 8);
-        flame.addBox(-4.0F, 0.0F, 4.0F, 8, 0, 8);
+        ModelBuilders.addBox(flame, 0, 24, -4.0F, -8.0F, 4.0F,
+                8.0F, 0.0F, 8.0F, 0.0F, 0.5F, 0.5F, false);
+        ModelBuilders.addBox(flame, 0, 24, -4.0F, 0.0F, 4.0F,
+                8.0F, 0.0F, 8.0F, 0.0F, 0.5F, 0.5F, false);
         flame.setRotationPoint(0.0F, 4.0F, 0.0F);
         head.addChild(flame);
 
         flameSide = new ModelRenderer(this, 0, 16);
-        flameSide.addBox(0.0F, -4.0F, -4.0F, 0, 8, 8);
-        flameSide.addBox(8.0F, -4.0F, -4.0F, 0, 8, 8);
+        ModelBuilders.addBox(flameSide, 0, 16, 0.0F, -4.0F, -4.0F,
+                0.0F, 8.0F, 8.0F, 0.0F, 0.5F, 0.5F, false);
+        ModelBuilders.addBox(flameSide, 0, 16, 8.0F, -4.0F, -4.0F,
+                0.0F, 8.0F, 8.0F, 0.0F, 0.5F, 0.5F, false);
         flameSide.setRotationPoint(-4.0F, -4.0F, 8.0F);
         flameSide.rotateAngleX = -1.5708F;
         flame.addChild(flameSide);

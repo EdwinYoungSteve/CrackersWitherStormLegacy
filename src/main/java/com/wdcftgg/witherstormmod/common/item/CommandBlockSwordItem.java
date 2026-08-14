@@ -45,6 +45,11 @@ public class CommandBlockSwordItem extends ItemSword {
     }
 
     @Override
+    public boolean isEnchantable(net.minecraft.item.ItemStack stack) {
+        return getItemStackLimit(stack) == 1;
+    }
+
+    @Override
     public boolean hasCustomEntity(net.minecraft.item.ItemStack stack) {
         return FireResistantItemEntity.isFireResistant(stack);
     }

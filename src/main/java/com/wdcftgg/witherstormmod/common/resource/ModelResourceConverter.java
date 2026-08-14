@@ -11,6 +11,7 @@ import com.google.gson.JsonPrimitive;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -20,6 +21,9 @@ final class ModelResourceConverter {
 
     private static final String MODEL_PREFIX = "assets/witherstormmod/models/";
     private static final String BLOCKSTATE_PREFIX = "assets/witherstormmod/blockstates/";
+    private static final String PHASOMETER_MODEL = MODEL_PREFIX + "item/phasometer.json";
+    private static final String PHASOMETER_GUI_MODEL = MODEL_PREFIX + "item/phasometer_gui.json";
+    private static final String PHASOMETER_SOURCE = MODEL_PREFIX + "item/phasometer.json";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Map<String, String> PARENT_REWRITES;
     private static final Map<String, Scale> PADDED_TEXTURES;
@@ -57,7 +61,7 @@ final class ModelResourceConverter {
         parents.put("minecraft:block/door_top_left_open", "minecraft:block/door_top_rh");
         parents.put("minecraft:block/door_top_right_open", "minecraft:block/door_top");
         parents.put("minecraft:item/template_spawn_egg", "minecraft:item/spawn_egg");
-        parents.put("item/crossbow", "minecraft:item/generated");
+        parents.put("item/crossbow", "futuremc:item/crossbow");
         PARENT_REWRITES = Collections.unmodifiableMap(parents);
 
         Map<String, Scale> padded = new HashMap<String, Scale>();
@@ -80,8 +84,8 @@ final class ModelResourceConverter {
         if (!handles(legacyName)) {
             return legacyName;
         }
-        if ((MODEL_PREFIX + "item/phasometer.json").equals(legacyName)) {
-            return MODEL_PREFIX + "item/phasometer_model.json";
+        if (PHASOMETER_MODEL.equals(legacyName) || PHASOMETER_GUI_MODEL.equals(legacyName)) {
+            return PHASOMETER_SOURCE;
         }
         return legacyName;
     }
@@ -91,8 +95,14 @@ final class ModelResourceConverter {
             JsonObject root = JsonParser.parseString(
                     new String(source, StandardCharsets.UTF_8)).getAsJsonObject();
             if (legacyName.startsWith(MODEL_PREFIX)) {
+                if (PHASOMETER_MODEL.equals(legacyName)) {
+                    root = requiredObject(root, "base", legacyName);
+                } else if (PHASOMETER_GUI_MODEL.equals(legacyName)) {
+                    JsonObject perspectives = requiredObject(root, "perspectives", legacyName);
+                    root = requiredObject(perspectives, "gui", legacyName);
+                }
                 convertModel(root);
-                if ((MODEL_PREFIX + "item/phasometer.json").equals(legacyName)) {
+                if (PHASOMETER_MODEL.equals(legacyName)) {
                     JsonObject textures = getOrCreateObject(root, "textures");
                     textures.addProperty("particle", "witherstormmod:items/phasometer_model");
                 }
@@ -182,8 +192,11 @@ final class ModelResourceConverter {
         if ("tainted_flesh_veins".equals(blockName)) {
             return fleshVeinsState();
         }
+        if ("tainted_dust_block".equals(blockName) || "withered_phlegm_block".equals(blockName)) {
+            return booleanState("powered", "witherstormmod:" + blockName);
+        }
         if ("formidibomb".equals(blockName) || "super_tnt".equals(blockName)) {
-            return explosiveState(blockName);
+            return explosiveState(blockName, blockState);
         }
         if ("tainted_wall_torch".equals(blockName) || "tainted_torch".equals(blockName)) {
             return torchState();
@@ -250,9 +263,18 @@ final class ModelResourceConverter {
     }
 
     private static JsonObject addPoweredVariants(JsonObject source) {
-        // ClientProxy 的状态映射器会忽略 BlockFenceGate.POWERED，因此保留
-        // 上游键即可，不再人为增加 powered 维度。
-        return source;
+        JsonObject sourceVariants = object(source.get("variants"));
+        if (sourceVariants == null) return source;
+        JsonObject variants = new JsonObject();
+        for (Map.Entry<String, JsonElement> entry : sourceVariants.entrySet()) {
+            String key = canonicalVariantKey(entry.getKey());
+            variants.add(key, copy(entry.getValue()));
+            if (!key.contains("powered=")) {
+                variants.add(canonicalVariantKey(key + ",powered=false"), copy(entry.getValue()));
+                variants.add(canonicalVariantKey(key + ",powered=true"), copy(entry.getValue()));
+            }
+        }
+        return rootWith("variants", variants);
     }
 
     private static JsonObject fleshVeinsState() {
@@ -268,7 +290,21 @@ final class ModelResourceConverter {
         return rootWith("multipart", multipart);
     }
 
-    private static JsonObject explosiveState(String name) {
+    private static JsonObject explosiveState(String name, JsonObject source) {
+        JsonObject sourceVariants = object(source.get("variants"));
+        if (sourceVariants != null && sourceVariants.size() > 0) {
+            JsonObject converted = new JsonObject();
+            for (Map.Entry<String, JsonElement> entry : sourceVariants.entrySet()) {
+                if (entry.getKey().isEmpty()) {
+                    converted.add("explode=false", copy(entry.getValue()));
+                    converted.add("explode=true", copy(entry.getValue()));
+                    continue;
+                }
+                String key = canonicalVariantKey(entry.getKey().replace("unstable=", "explode="));
+                converted.add(key, copy(entry.getValue()));
+            }
+            return rootWith("variants", converted);
+        }
         JsonObject variants = new JsonObject();
         variants.add("explode=false", model("witherstormmod:" + name));
         variants.add("explode=true", model("witherstormmod:" + name));
@@ -288,12 +324,19 @@ final class ModelResourceConverter {
     private static JsonObject standingSignState() {
         JsonObject variants = new JsonObject();
         variants.add("normal", model("witherstormmod:tainted_sign"));
+        for (int rotation = 0; rotation < 16; rotation++) {
+            variants.add("rotation=" + rotation, model("witherstormmod:tainted_sign"));
+        }
         return rootWith("variants", variants);
     }
 
     private static JsonObject wallSignState() {
         JsonObject variants = new JsonObject();
         variants.add("normal", model("witherstormmod:tainted_sign"));
+        variants.add("facing=north", model("witherstormmod:tainted_sign"));
+        variants.add("facing=east", model("witherstormmod:tainted_sign"));
+        variants.add("facing=south", model("witherstormmod:tainted_sign"));
+        variants.add("facing=west", model("witherstormmod:tainted_sign"));
         return rootWith("variants", variants);
     }
 
@@ -336,6 +379,20 @@ final class ModelResourceConverter {
         return value;
     }
 
+    private static JsonObject booleanState(String property, String modelName) {
+        JsonObject variants = new JsonObject();
+        variants.add(property + "=false", model(modelName));
+        variants.add(property + "=true", model(modelName));
+        return rootWith("variants", variants);
+    }
+
+    private static String canonicalVariantKey(String key) {
+        if (key == null || key.isEmpty() || "normal".equals(key)) return key;
+        String[] properties = key.split(",");
+        Arrays.sort(properties);
+        return String.join(",", properties);
+    }
+
     private static JsonObject part(String key, String value, JsonObject apply) {
         JsonObject when = new JsonObject();
         when.addProperty(key, value);
@@ -375,6 +432,15 @@ final class ModelResourceConverter {
 
     private static JsonObject object(JsonElement value) {
         return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
+    }
+
+    private static JsonObject requiredObject(JsonObject parent, String key, String legacyName) {
+        JsonObject value = object(parent.get(key));
+        if (value == null) {
+            throw new IllegalArgumentException(
+                    "Missing " + key + " in upstream phasometer model for " + legacyName);
+        }
+        return value.deepCopy();
     }
 
     private static JsonArray array(JsonElement value) {

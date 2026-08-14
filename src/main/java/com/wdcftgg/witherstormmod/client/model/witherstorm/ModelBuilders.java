@@ -3,6 +3,9 @@ package com.wdcftgg.witherstormmod.client.model.witherstorm;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelBox;
 import net.minecraft.client.model.ModelRenderer;
+import net.minecraft.client.model.PositionTextureVertex;
+import net.minecraft.client.model.TexturedQuad;
+import net.minecraft.client.renderer.BufferBuilder;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,6 +13,32 @@ import java.util.Map;
 
 public final class ModelBuilders {
     private ModelBuilders() { }
+
+    /** Adds a modern ModelPart cube without rounding fractional bounds or texture scaling. */
+    public static void addBox(ModelRenderer renderer, float textureU, float textureV,
+                              float x, float y, float z,
+                              float width, float height, float depth,
+                              float inflate, float textureScaleU, float textureScaleV,
+                              boolean mirror) {
+        float originalTextureWidth = renderer.textureWidth;
+        float originalTextureHeight = renderer.textureHeight;
+        renderer.textureWidth = originalTextureWidth * textureScaleU;
+        renderer.textureHeight = originalTextureHeight * textureScaleV;
+        renderer.cubeList.add(new FloatModelBox(renderer, textureU, textureV,
+                x, y, z, width, height, depth, inflate, mirror));
+        renderer.textureWidth = originalTextureWidth;
+        renderer.textureHeight = originalTextureHeight;
+    }
+
+    /** Exact cube bounds for 1.20 boxes whose dimensions cannot be represented by 1.12 ModelBox. */
+    public interface PreciseModelBoxBounds {
+        float minimumX();
+        float minimumY();
+        float minimumZ();
+        float maximumX();
+        float maximumY();
+        float maximumZ();
+    }
 
     public static final class CubeDeformation {
         public static final CubeDeformation f_171458_ = new CubeDeformation(0.0F);
@@ -89,8 +118,15 @@ public final class ModelBuilders {
                 child.setTextureOffset(cube.u, cube.v);
                 child.textureWidth = model.textureWidth * cube.textureScaleU;
                 child.textureHeight = model.textureHeight * cube.textureScaleV;
-                child.cubeList.add(new ModelBox(child, cube.u, cube.v, cube.x, cube.y, cube.z,
-                        Math.round(cube.width), Math.round(cube.height), Math.round(cube.depth), cube.inflate, cube.mirror));
+                if (isWhole(cube.width) && isWhole(cube.height) && isWhole(cube.depth)) {
+                    child.cubeList.add(new ModelBox(child, cube.u, cube.v, cube.x, cube.y, cube.z,
+                            Math.round(cube.width), Math.round(cube.height), Math.round(cube.depth),
+                            cube.inflate, cube.mirror));
+                } else {
+                    child.cubeList.add(new FloatModelBox(child, cube.u, cube.v,
+                            cube.x, cube.y, cube.z, cube.width, cube.height, cube.depth,
+                            cube.inflate, cube.mirror));
+                }
             }
             child.textureWidth = model.textureWidth;
             child.textureHeight = model.textureHeight;
@@ -104,5 +140,120 @@ public final class ModelBuilders {
         public PartDefinition m_171597_(String name) { return children.get(name); }
         public Map<String, PartDefinition> children() { return children; }
         public ModelRenderer renderer() { return renderer; }
+    }
+
+    private static boolean isWhole(float value) {
+        return value == Math.round(value);
+    }
+
+    /** Preserves the fractional cube dimensions supported by the 1.20 ModelPart API. */
+    private static final class FloatModelBox extends ModelBox implements PreciseModelBoxBounds {
+        private final TexturedQuad[] floatQuads;
+        private final float preciseMinimumX;
+        private final float preciseMinimumY;
+        private final float preciseMinimumZ;
+        private final float preciseMaximumX;
+        private final float preciseMaximumY;
+        private final float preciseMaximumZ;
+
+        FloatModelBox(ModelRenderer renderer, float textureU, float textureV,
+                      float x, float y, float z, float width, float height, float depth,
+                      float inflate, boolean mirror) {
+            super(renderer, Math.round(textureU), Math.round(textureV), x, y, z,
+                    Math.round(width), Math.round(height), Math.round(depth), inflate, mirror);
+
+            preciseMinimumX = x;
+            preciseMinimumY = y;
+            preciseMinimumZ = z;
+            preciseMaximumX = x + width;
+            preciseMaximumY = y + height;
+            preciseMaximumZ = z + depth;
+            float maximumX = x + width;
+            float maximumY = y + height;
+            float maximumZ = z + depth;
+            x -= inflate;
+            y -= inflate;
+            z -= inflate;
+            maximumX += inflate;
+            maximumY += inflate;
+            maximumZ += inflate;
+            if (mirror) {
+                float swap = maximumX;
+                maximumX = x;
+                x = swap;
+            }
+
+            PositionTextureVertex p0 = vertex(x, y, z);
+            PositionTextureVertex p1 = vertex(maximumX, y, z);
+            PositionTextureVertex p2 = vertex(maximumX, maximumY, z);
+            PositionTextureVertex p3 = vertex(x, maximumY, z);
+            PositionTextureVertex p4 = vertex(x, y, maximumZ);
+            PositionTextureVertex p5 = vertex(maximumX, y, maximumZ);
+            PositionTextureVertex p6 = vertex(maximumX, maximumY, maximumZ);
+            PositionTextureVertex p7 = vertex(x, maximumY, maximumZ);
+            float textureWidth = renderer.textureWidth;
+            float textureHeight = renderer.textureHeight;
+
+            floatQuads = new TexturedQuad[]{
+                    quad(new PositionTextureVertex[]{p5, p1, p2, p6},
+                            textureU + depth + width, textureV + depth,
+                            textureU + depth + width + depth, textureV + depth + height,
+                            textureWidth, textureHeight),
+                    quad(new PositionTextureVertex[]{p0, p4, p7, p3},
+                            textureU, textureV + depth,
+                            textureU + depth, textureV + depth + height,
+                            textureWidth, textureHeight),
+                    quad(new PositionTextureVertex[]{p5, p4, p0, p1},
+                            textureU + depth, textureV,
+                            textureU + depth + width, textureV + depth,
+                            textureWidth, textureHeight),
+                    quad(new PositionTextureVertex[]{p2, p3, p7, p6},
+                            textureU + depth + width, textureV + depth,
+                            textureU + depth + width + width, textureV,
+                            textureWidth, textureHeight),
+                    quad(new PositionTextureVertex[]{p1, p0, p3, p2},
+                            textureU + depth, textureV + depth,
+                            textureU + depth + width, textureV + depth + height,
+                            textureWidth, textureHeight),
+                    quad(new PositionTextureVertex[]{p4, p5, p6, p7},
+                            textureU + depth + width + depth, textureV + depth,
+                            textureU + depth + width + depth + width, textureV + depth + height,
+                            textureWidth, textureHeight)
+            };
+            if (mirror) {
+                for (TexturedQuad quad : floatQuads) quad.flipFace();
+            }
+        }
+
+        private static PositionTextureVertex vertex(float x, float y, float z) {
+            return new PositionTextureVertex(x, y, z, 0.0F, 0.0F);
+        }
+
+        private static TexturedQuad quad(PositionTextureVertex[] vertices,
+                                         float minimumU, float minimumV,
+                                         float maximumU, float maximumV,
+                                         float textureWidth, float textureHeight) {
+            vertices[0] = vertices[0].setTexturePosition(maximumU / textureWidth,
+                    minimumV / textureHeight);
+            vertices[1] = vertices[1].setTexturePosition(minimumU / textureWidth,
+                    minimumV / textureHeight);
+            vertices[2] = vertices[2].setTexturePosition(minimumU / textureWidth,
+                    maximumV / textureHeight);
+            vertices[3] = vertices[3].setTexturePosition(maximumU / textureWidth,
+                    maximumV / textureHeight);
+            return new TexturedQuad(vertices);
+        }
+
+        @Override
+        public void render(BufferBuilder renderer, float scale) {
+            for (TexturedQuad quad : floatQuads) quad.draw(renderer, scale);
+        }
+
+        @Override public float minimumX() { return preciseMinimumX; }
+        @Override public float minimumY() { return preciseMinimumY; }
+        @Override public float minimumZ() { return preciseMinimumZ; }
+        @Override public float maximumX() { return preciseMaximumX; }
+        @Override public float maximumY() { return preciseMaximumY; }
+        @Override public float maximumZ() { return preciseMaximumZ; }
     }
 }

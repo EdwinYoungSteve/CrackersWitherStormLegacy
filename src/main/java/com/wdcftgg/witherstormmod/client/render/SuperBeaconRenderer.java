@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuperBeaconTileEntity> {
-    private static final double AREA_RADIUS = 128.0D;
     private static final ResourceLocation MAIN_CRYSTAL =
             new ResourceLocation(Tags.MOD_ID, "block/tainted_dust_block");
     private static final ResourceLocation CONNECT_BEAM =
@@ -61,14 +60,14 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
 
         if (beacon instanceof SuperSupportBeaconTileEntity) {
             SuperSupportBeaconTileEntity support = (SuperSupportBeaconTileEntity) beacon;
-            if (animation > 0.001F) renderSupportLink(support, x, y, z, animation);
-            if (support.showWorkingArea()) renderSupportArea(support, x, y, z);
+            if (animation > 0.001F) renderSupportLink(support, x, y, z, partialTicks, animation);
         } else {
             SuperBeaconTileEntity main = (SuperBeaconTileEntity) beacon;
-            if (beacon.isActive() && animation > 0.001F) {
+            if (beacon.isActive()) {
                 renderVerticalBeam(beacon, x, y, z, partialTicks, animation);
             }
             renderMainItems(main, x, y, z, partialTicks);
+            if (main.showWorkingArea()) renderWorkingArea(main, x, y, z);
             if (main.isResummoningWitherStorm()
                     && main.getResummonTicks() > SuperBeaconLogic.RESUMMON_START) {
                 renderResummonCommandBlock(main, x, y, z, partialTicks);
@@ -121,20 +120,27 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
 
     private static void renderOrb(float scale, float minU, float minV, float maxU, float maxV,
                                   AbstractSuperBeaconTileEntity beacon) {
+        float previousLightX = OpenGlHelper.lastBrightnessX;
+        float previousLightY = OpenGlHelper.lastBrightnessY;
         int light = beacon.isActive()
                 ? beacon.getWorld().getCombinedLight(beacon.getPos(), 0) : 0x00F000F0;
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
                 light & 65535, light >>> 16);
-        GlStateManager.disableLighting();
-        for (int axis = 0; axis < 3; axis++) {
-            GlStateManager.pushMatrix();
-            if (axis == 0) GlStateManager.rotate(45.0F, 1.0F, 0.0F, 0.0F);
-            if (axis == 1) GlStateManager.rotate(45.0F, 0.0F, 1.0F, 0.0F);
-            if (axis == 2) GlStateManager.rotate(45.0F, 0.0F, 0.0F, 1.0F);
-            drawTexturedCube(scale * 0.5F, minU, minV, maxU, maxV);
-            GlStateManager.popMatrix();
+        try {
+            GlStateManager.disableLighting();
+            for (int axis = 0; axis < 3; axis++) {
+                GlStateManager.pushMatrix();
+                if (axis == 0) GlStateManager.rotate(45.0F, 1.0F, 0.0F, 0.0F);
+                if (axis == 1) GlStateManager.rotate(45.0F, 0.0F, 1.0F, 0.0F);
+                if (axis == 2) GlStateManager.rotate(45.0F, 0.0F, 0.0F, 1.0F);
+                drawTexturedCube(scale * 0.5F, minU, minV, maxU, maxV);
+                GlStateManager.popMatrix();
+            }
+            GlStateManager.enableLighting();
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                    previousLightX, previousLightY);
         }
-        GlStateManager.enableLighting();
     }
 
     private static void drawTexturedCube(float radius, float minU, float minV, float maxU, float maxV) {
@@ -223,24 +229,28 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
         float[] color = {rgb[0] / 255.0F, rgb[1] / 255.0F, rgb[2] / 255.0F};
         int height = Math.max(1, Math.min(beacon.getBeamHeight(), 1024));
         bindTexture(TileEntityBeaconRenderer.TEXTURE_BEACON_BEAM);
-        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
-        GlStateManager.disableFog();
-        TileEntityBeaconRenderer.renderBeamSegment(x, y, z, partialTicks, animation,
-                beacon.getWorld().getTotalWorldTime(), 0, height, color,
-                beacon.getBeamThickness(), beacon.getOuterBeamThickness());
-        GlStateManager.enableFog();
+        GlStateManager.pushAttrib();
+        try {
+            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+            GlStateManager.disableFog();
+            TileEntityBeaconRenderer.renderBeamSegment(x, y + 0.5D, z, partialTicks, 1.0D,
+                    beacon.getWorld().getTotalWorldTime(), 0, height, color,
+                    beacon.getBeamThickness(), beacon.getOuterBeamThickness());
+        } finally {
+            GlStateManager.popAttrib();
+        }
     }
 
     private void renderSupportLink(SuperSupportBeaconTileEntity support, double x, double y, double z,
-                                   float animation) {
+                                   float partialTicks, float animation) {
         BlockPos target = support.getBeamTarget();
         if (target == null) return;
         double endX = target.getX() - support.getPos().getX();
         double endY = target.getY() - support.getPos().getY();
         double endZ = target.getZ() - support.getPos().getZ();
         renderConnection(x + 0.5D, y + 0.6D, z + 0.5D,
-                x + endX + 0.5D, y + endY + 0.4D, z + endZ + 0.5D,
-                support.getBeamColor(), crystalScale(support, 0.0F), animation);
+                x + endX + 0.5D, y + endY + 0.5D, z + endZ + 0.5D,
+                support.getBeamColor(), crystalScale(support, partialTicks), animation);
     }
 
     private void renderConnection(double startX, double startY, double startZ,
@@ -248,26 +258,49 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
                                   int[] rgb, double radius, float animation) {
         bindTexture(CONNECT_BEAM);
         GlStateManager.pushAttrib();
+        float previousLightX = OpenGlHelper.lastBrightnessX;
+        float previousLightY = OpenGlHelper.lastBrightnessY;
         GlStateManager.disableLighting();
         GlStateManager.enableBlend();
         GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         GlStateManager.depthMask(false);
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_COLOR);
         double dx = endX - startX;
+        double dy = endY - startY;
         double dz = endZ - startZ;
-        double horizontal = Math.sqrt(dx * dx + dz * dz);
-        double sideX = horizontal < 1.0E-4D ? radius : -dz / horizontal * radius;
-        double sideZ = horizontal < 1.0E-4D ? 0.0D : dx / horizontal * radius;
+        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (length < 1.0E-6D) {
+            GlStateManager.depthMask(true);
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                    previousLightX, previousLightY);
+            GlStateManager.popAttrib();
+            return;
+        }
+        double nx = dx / length;
+        double ny = dy / length;
+        double nz = dz / length;
+        double horizontal = Math.sqrt(nx * nx + nz * nz);
+        double sideX = horizontal < 1.0E-6D ? radius : -nz / horizontal * radius;
+        double sideZ = horizontal < 1.0E-6D ? 0.0D : nx / horizontal * radius;
+        double secondX = ny * sideZ;
+        double secondY = nz * sideX - nx * sideZ;
+        double secondZ = -ny * sideX;
+        float red = 0.5F + animation * (rgb[0] / 255.0F - 0.5F);
+        float green = 0.5F + animation * (rgb[1] / 255.0F - 0.5F);
+        float blue = 0.5F + animation * (rgb[2] / 255.0F - 0.5F);
         texturedRibbon(buffer, startX, startY, startZ, endX, endY, endZ,
-                sideX, 0.0D, sideZ, rgb, animation);
+                sideX, 0.0D, sideZ, red, green, blue, animation);
         texturedRibbon(buffer, startX, startY, startZ, endX, endY, endZ,
-                0.0D, radius, 0.0D, rgb, animation);
+                secondX, secondY, secondZ, red, green, blue, animation);
         tessellator.draw();
         GlStateManager.depthMask(true);
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                previousLightX, previousLightY);
         GlStateManager.popAttrib();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
@@ -276,10 +309,7 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
                                        double startX, double startY, double startZ,
                                        double endX, double endY, double endZ,
                                        double offsetX, double offsetY, double offsetZ,
-                                       int[] rgb, float alpha) {
-        float red = rgb[0] / 255.0F;
-        float green = rgb[1] / 255.0F;
-        float blue = rgb[2] / 255.0F;
+                                       float red, float green, float blue, float alpha) {
         buffer.pos(startX - offsetX, startY - offsetY, startZ - offsetZ)
                 .tex(0.0D, 0.0D).color(red, green, blue, alpha).endVertex();
         buffer.pos(startX + offsetX, startY + offsetY, startZ + offsetZ)
@@ -290,64 +320,8 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
                 .tex(0.0D, 1.0D).color(red, green, blue, alpha).endVertex();
     }
 
-    private static void ribbonHorizontal(BufferBuilder buffer, double startX, double startY, double startZ,
-                                         double endX, double endY, double endZ,
-                                         double offsetX, double offsetZ,
-                                         float red, float green, float blue) {
-        buffer.pos(startX - offsetX, startY, startZ - offsetZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(startX + offsetX, startY, startZ + offsetZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(endX + offsetX, endY, endZ + offsetZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(endX - offsetX, endY, endZ - offsetZ).color(red, green, blue, 0.8F).endVertex();
-    }
-
-    private static void ribbonVertical(BufferBuilder buffer, double startX, double startY, double startZ,
-                                       double endX, double endY, double endZ, double offsetY,
-                                       float red, float green, float blue) {
-        buffer.pos(startX, startY - offsetY, startZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(startX, startY + offsetY, startZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(endX, endY + offsetY, endZ).color(red, green, blue, 0.8F).endVertex();
-        buffer.pos(endX, endY - offsetY, endZ).color(red, green, blue, 0.8F).endVertex();
-    }
-
-    private void renderSupportArea(SuperSupportBeaconTileEntity support, double x, double y, double z) {
-        BlockPos main = support.getConnectedBeacon();
-        if (main == null) return;
-        double originX = x + main.getX() - support.getPos().getX() + 0.5D;
-        double originY = y + main.getY() - support.getPos().getY() + 0.04D;
-        double originZ = z + main.getZ() - support.getPos().getZ() + 0.5D;
-        float center = SuperBeaconLogic.angleDegrees(
-                support.getPos().getX() - main.getX(), support.getPos().getZ() - main.getZ());
-        int[] rgb = support.getBeamColor();
-        float red = rgb[0] / 255.0F;
-        float green = rgb[1] / 255.0F;
-        float blue = rgb[2] / 255.0F;
-
-        prepareTransparentGeometry(true);
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
-        buffer.pos(originX, originY, originZ).color(red, green, blue, 0.12F).endVertex();
-        for (int step = 0; step <= 24; step++) {
-            double angle = Math.toRadians(center - 45.0F + step * (90.0F / 24.0F));
-            buffer.pos(originX + Math.sin(angle) * AREA_RADIUS, originY,
-                    originZ + Math.cos(angle) * AREA_RADIUS).color(red, green, blue, 0.03F).endVertex();
-        }
-        tessellator.draw();
-
-        GlStateManager.glLineWidth(2.0F);
-        buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
-        for (float edge : new float[] {center - 45.0F, center + 45.0F}) {
-            double angle = Math.toRadians(edge);
-            buffer.pos(originX, originY, originZ).color(red, green, blue, 0.55F).endVertex();
-            buffer.pos(originX + Math.sin(angle) * AREA_RADIUS, originY,
-                    originZ + Math.cos(angle) * AREA_RADIUS).color(red, green, blue, 0.15F).endVertex();
-        }
-        tessellator.draw();
-        GlStateManager.glLineWidth(1.0F);
-        restoreGeometry();
-    }
-
-    private static void prepareTransparentGeometry(boolean disableDepth) {
+    private void renderWorkingArea(SuperBeaconTileEntity beacon, double x, double y, double z) {
+        if (beacon.getConnected().isEmpty()) return;
         GlStateManager.pushAttrib();
         GlStateManager.disableLighting();
         GlStateManager.disableTexture2D();
@@ -355,14 +329,45 @@ public class SuperBeaconRenderer extends TileEntitySpecialRenderer<AbstractSuper
         GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-        GlStateManager.depthMask(false);
-        if (disableDepth) GlStateManager.disableDepth();
-    }
-
-    private static void restoreGeometry() {
-        GlStateManager.depthMask(true);
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
+        for (Map.Entry<SuperBeaconTileEntity.SupportColor, BlockPos> entry
+                : beacon.getConnected().entrySet()) {
+            BlockPos support = entry.getValue();
+            float angle = SuperBeaconLogic.angleDegrees(support.getX() - beacon.getPos().getX(),
+                    support.getZ() - beacon.getPos().getZ());
+            float[] color = entry.getKey().getLogic().getBeamColor();
+            for (float edge : new float[] {angle + 45.0F, angle - 45.0F}) {
+                float offset = edge > angle ? -0.05F : 0.05F;
+                workingAreaSegment(buffer, x + 0.5D, y + 0.5D, z + 0.5D,
+                        0.0F, 10.0F, edge, offset, color);
+                workingAreaSegment(buffer, x + 0.5D, y + 0.5D, z + 0.5D,
+                        11.0F, 1.0F, edge, offset, color);
+                workingAreaSegment(buffer, x + 0.5D, y + 0.5D, z + 0.5D,
+                        13.0F, 1.0F, edge, offset, color);
+                workingAreaSegment(buffer, x + 0.5D, y + 0.5D, z + 0.5D,
+                        15.0F, 0.5F, edge, offset, color);
+            }
+        }
+        tessellator.draw();
         GlStateManager.popAttrib();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    private static void workingAreaSegment(BufferBuilder buffer, double originX, double originY,
+                                           double originZ, float zOffset, float distance,
+                                           float angle, float xOffset, float[] color) {
+        double radians = Math.toRadians(angle);
+        double sin = Math.sin(radians);
+        double cos = Math.cos(radians);
+        double startX = originX + cos * xOffset + sin * zOffset;
+        double startZ = originZ - sin * xOffset + cos * zOffset;
+        double endDistance = zOffset + distance;
+        double endX = originX + cos * xOffset + sin * endDistance;
+        double endZ = originZ - sin * xOffset + cos * endDistance;
+        buffer.pos(startX, originY, startZ).color(color[0], color[1], color[2], 1.0F).endVertex();
+        buffer.pos(endX, originY, endZ).color(color[0], color[1], color[2], 1.0F).endVertex();
     }
 
     @Override

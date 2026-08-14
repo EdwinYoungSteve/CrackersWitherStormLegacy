@@ -4,6 +4,7 @@ import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.math.MathHelper;
 
 public class TentacleModel extends ModelBase {
 
@@ -33,10 +34,11 @@ public class TentacleModel extends ModelBase {
     }
 
     @Override
-    public void render(Entity entity, float partialTicks, float amount, float ageInTicks,
+    public void render(Entity entity, float partialTicks, float limbSwingAmount, float ageInTicks,
                        float yaw, float pitch, float scale) {
         if (entity instanceof SickenedEntities.TentacleEntity) {
             SickenedEntities.TentacleEntity tentacle = (SickenedEntities.TentacleEntity) entity;
+            partialTicks = MathHelper.clamp(partialTicks, 0.0F, 1.0F);
             for (int index = 0; index < segments.length; index++) {
                 segments[index].rotateAngleX = tentacle.getSegmentPitch(index, partialTicks);
                 segments[index].rotateAngleY = tentacle.getSegmentYaw(index, partialTicks);

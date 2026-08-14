@@ -1,26 +1,54 @@
 package com.wdcftgg.witherstormmod.common.item;
 
-import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
-import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
+import com.wdcftgg.witherstormmod.Tags;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.util.ITooltipFlag;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumAction;
 import net.minecraft.item.EnumRarity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemSword;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
 
-public class FormidiBladeItem extends ItemSword {
+import javax.annotation.Nullable;
+import java.util.List;
+
+/**
+ * Formidi 之刃：蓄力 40 刻达到满充能，命中时消耗充能产生无方块破坏的爆炸，
+ * 并在冷却期间播放释放音效。NBT 键与上游保持一致。
+ */
+public class FormidiBladeItem extends CommandBlockSwordItem {
+
+    public static final int DEFAULT_RELEASE_TIME = 40;
+    public static final String POWER = "Power";
+    public static final String IS_CHARGED = "IsCharged";
+    public static final ResourceLocation ANIM_PROPERTY =
+            new ResourceLocation(Tags.MOD_ID, "anim");
+    private static final float POWER_DECREASE_PER_TICK = 0.2F;
 
     public FormidiBladeItem(String name) {
-        super(ModToolMaterials.FORMIDI_BLADE);
-        setRegistryName(name);
-        setTranslationKey(name);
-        setCreativeTab(ModCreativeTabs.MAIN);
-        setMaxDamage(3122);
+        super(name, ModToolMaterials.FORMIDI_BLADE, 3.0F, -3.7F);
+    }
+
+    @Override
+    public void onUpdate(ItemStack stack, World world, net.minecraft.entity.Entity entity,
+                         int slot, boolean selected) {
+        NBTTagCompound tag = getBladeTag(stack, true);
+        if (tag == null || !tag.hasKey(IS_CHARGED) || tag.getBoolean(IS_CHARGED)) return;
+        if (!tag.hasKey(POWER)) return;
+        float power = tag.getFloat(POWER);
+        if (power > POWER_DECREASE_PER_TICK) {
+            tag.setFloat(POWER, power - POWER_DECREASE_PER_TICK);
+        } else {
+            tag.removeTag(POWER);
+        }
     }
 
     @Override
@@ -30,46 +58,116 @@ public class FormidiBladeItem extends ItemSword {
 
     @Override
     public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, EnumHand hand) {
+        ItemStack stack = player.getHeldItem(hand);
+        if (player.getCooldownTracker().hasCooldown(this)) {
+            return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
+        }
+        NBTTagCompound tag = getBladeTag(stack, false);
+        float power = tag == null ? 0.0F : tag.getFloat(POWER);
+        if (power >= 1.0F) {
+            return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
+        }
         player.setActiveHand(hand);
-        return new ActionResult<ItemStack>(EnumActionResult.SUCCESS, player.getHeldItem(hand));
+        return new ActionResult<ItemStack>(EnumActionResult.SUCCESS, stack);
     }
 
     @Override
     public int getMaxItemUseDuration(ItemStack stack) {
-        return 40;
+        return 72000;
     }
 
     @Override
     public EnumAction getItemUseAction(ItemStack stack) {
-        return EnumAction.BOW;
+        return EnumAction.NONE;
     }
 
     @Override
-    public void onPlayerStoppedUsing(ItemStack stack, World world, EntityLivingBase entity, int timeLeft) {
-        int chargeTime = getMaxItemUseDuration(stack) - timeLeft;
-        if (chargeTime >= 30) {
-            stack.getOrCreateSubCompound("WitherStormMod").setBoolean("Charged", true);
+    public void onPlayerStoppedUsing(ItemStack stack, World world, EntityLivingBase entity,
+                                     int timeLeft) {
+        int elapsed = Math.max(0, getMaxItemUseDuration(stack) - timeLeft);
+        float power = Math.min(1.0F, elapsed / (float) DEFAULT_RELEASE_TIME);
+        NBTTagCompound tag = stack.getTagCompound();
+        if (tag == null) {
+            tag = new NBTTagCompound();
+            stack.setTagCompound(tag);
         }
+        tag.setFloat(POWER, power);
+        tag.setBoolean(IS_CHARGED, true);
     }
 
     @Override
-    public boolean hitEntity(ItemStack stack, EntityLivingBase target, EntityLivingBase attacker) {
-        if (stack.hasTagCompound() && stack.getSubCompound("WitherStormMod") != null
-                && stack.getSubCompound("WitherStormMod").getBoolean("Charged")) {
-            if (!attacker.world.isRemote) {
-                float explosionStrength = target instanceof WitherStormEntity ? 8.0F : 4.0F;
-                attacker.world.newExplosion(attacker, target.posX, target.posY + target.height * 0.5D, target.posZ,
-                        explosionStrength, false, false);
+    public boolean hasCustomEntity(ItemStack stack) {
+        return true;
+    }
+
+    @Override
+    public Entity createEntity(World world, Entity location, ItemStack stack) {
+        return FireResistantItemEntity.create(world, location, stack);
+    }
+
+    @Override
+    public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip,
+                               ITooltipFlag flag) {
+        tooltip.add(TextFormatting.DARK_GRAY
+                + I18n.format("item.witherstormmod.formidi_blade.author"));
+        tooltip.add(TextFormatting.DARK_GRAY
+                + I18n.format("item.witherstormmod.formidi_blade.use"));
+    }
+
+    @Override
+    public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack,
+                                                boolean slotChanged) {
+        return slotChanged && super.shouldCauseReequipAnimation(oldStack, newStack, true);
+    }
+
+    /** 上游 anim 模型谓词：蓄力中 0~1，满充能 1，释放后从 2 衰减回 0。 */
+    public static float getPower(EntityLivingBase living, ItemStack stack, boolean using) {
+        float current = 0.0F;
+        if (using && living != null && living.isHandActive()) {
+            int remaining = living.getItemInUseCount();
+            if (remaining > 0) {
+                current = Math.min(1.0F,
+                        (float) (72000 - remaining) / DEFAULT_RELEASE_TIME);
             }
-            stack.getSubCompound("WitherStormMod").setBoolean("Charged", false);
-            stack.damageItem(16, attacker);
         }
-        return super.hitEntity(stack, target, attacker);
+        if (stack.hasTagCompound()) {
+            NBTTagCompound tag = getBladeTag(stack, false);
+            if (tag.hasKey(POWER)) {
+                return Math.max(current, tag.getFloat(POWER));
+            }
+        }
+        return current;
     }
 
-    @Override
-    public boolean hasEffect(ItemStack stack) {
-        return stack.hasTagCompound() && stack.getSubCompound("WitherStormMod") != null
-                && stack.getSubCompound("WitherStormMod").getBoolean("Charged");
+    public static NBTTagCompound getBladeTag(ItemStack stack, boolean create) {
+        NBTTagCompound root = stack.getTagCompound();
+        if (root == null) {
+            if (!create) return new NBTTagCompound();
+            root = new NBTTagCompound();
+            stack.setTagCompound(root);
+        }
+        NBTTagCompound legacy = root.getCompoundTag("WitherStormMod");
+        if (!root.hasKey(POWER) && legacy.hasKey(POWER)) {
+            root.setFloat(POWER, legacy.getFloat(POWER));
+        }
+        if (!root.hasKey(IS_CHARGED) && legacy.hasKey(IS_CHARGED)) {
+            root.setBoolean(IS_CHARGED, legacy.getBoolean(IS_CHARGED));
+        }
+        if (legacy.hasKey(POWER)) legacy.removeTag(POWER);
+        if (legacy.hasKey(IS_CHARGED)) legacy.removeTag(IS_CHARGED);
+        if (legacy.getKeySet().isEmpty()) root.removeTag("WitherStormMod");
+        return root;
+    }
+
+    public static void registerPropertyOverrides() {
+        FormidiBladeItem item = (FormidiBladeItem) com.wdcftgg.witherstormmod.common.init.ModItems
+                .get("formidi_blade");
+        item.addPropertyOverride(ANIM_PROPERTY, (stack, world, entity) -> {
+            EntityLivingBase living = entity instanceof EntityLivingBase
+                    ? (EntityLivingBase) entity : null;
+            boolean holding = living != null && (living.getHeldItemMainhand() == stack
+                    || living.getHeldItemOffhand() == stack);
+            return getPower(living, stack, holding && living.isHandActive());
+        });
     }
 }

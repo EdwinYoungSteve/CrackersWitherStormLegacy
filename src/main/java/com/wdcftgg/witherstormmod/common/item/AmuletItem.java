@@ -48,7 +48,8 @@ public class AmuletItem extends Item {
     public static final String SELECTED_INDEX = "SelectedIndex";
     public static final String LOCKED_TAG = "Locked";
     public static final String TRACK_ENTITY_TYPES = "TrackEntityTypes";
-    public static final int DEFAULT_SCAN_DISTANCE = 500;
+    public static final int DEFAULT_SCAN_DISTANCE = 1000;
+    private static final double ENTITY_TYPE_SCAN_DISTANCE = 500.0D;
 
     private static final String TYPE_SUFFIX = "Type";
     private static final String DISTANCE_SUFFIX = "Dist";
@@ -200,7 +201,7 @@ public class AmuletItem extends Item {
         Entity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         List<Entity> candidates = world.getEntitiesWithinAABB(Entity.class,
-                player.getEntityBoundingBox().grow(DEFAULT_SCAN_DISTANCE));
+                player.getEntityBoundingBox().grow(ENTITY_TYPE_SCAN_DISTANCE));
         for (Entity candidate : candidates) {
             if (candidate == player || !trackedType.equals(entityType(candidate))) continue;
             double distance = player.getDistanceSq(candidate);

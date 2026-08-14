@@ -3,6 +3,9 @@ package com.wdcftgg.witherstormmod.common.tile;
 import com.wdcftgg.witherstormmod.common.beacon.SuperBeaconLogic;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.SoundEvents;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.play.server.SPacketUpdateTileEntity;
@@ -11,8 +14,13 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.LockCode;
 
 import java.util.Collections;
+import java.util.Random;
 import java.util.Set;
 
 public abstract class AbstractSuperBeaconTileEntity extends TileEntity {
@@ -27,28 +35,36 @@ public abstract class AbstractSuperBeaconTileEntity extends TileEntity {
     int poweringUpAnimation;
     protected boolean showWorkingArea;
     protected int effectSetCooldown;
+    protected String customName;
+    private LockCode lockCode = LockCode.EMPTY_CODE;
+    private final int ambientSoundOffset = new Random().nextInt(100);
 
     protected final void tickBeaconBase() {
         ticks++;
+        if (world != null && !world.isRemote) {
+            com.wdcftgg.witherstormmod.common.network.ModNetwork.updateDistantSuperBeacon(this);
+        }
+        if (hasReachedPowerUpClimax()) {
+            activationTime++;
+            if (beamHeight < 1024) beamHeight += activationTime / 2;
+        }
         previousActivationAnimation = activationAnimation;
         boolean animate = shouldDoActivatedAnimation();
         activationAnimation += ((animate ? 1.0F : 0.0F) - activationAnimation) / 8.0F;
 
-        if (hasReachedPowerUpClimax()) {
-            activationTime++;
-            if (beamHeight < 1024) beamHeight += activationTime / 2;
+        if (world != null && !world.isRemote && isActive() && !isPoweringUp()
+                && (ticks + ambientSoundOffset) % 80 == 0
+                && ModSounds.get("withered_beacon_ambient") != null) {
+            world.playSound(null, pos, ModSounds.get("withered_beacon_ambient"),
+                    SoundCategory.BLOCKS, 1.0F, 1.0F);
         }
         if (poweringUpAnimation > 0) {
             poweringUpAnimation--;
             doPoweringUpAnimation();
         }
         if (world != null && !world.isRemote) {
-            com.wdcftgg.witherstormmod.common.network.ModNetwork.updateDistantSuperBeacon(this);
-            if (effectSetCooldown > 0) effectSetCooldown--;
             if (isActive() && effect != null) applyEffect();
-            if (isActive() && poweringUpAnimation <= 0 && (ticks + pos.hashCode()) % 80 == 0) {
-                playSound("withered_beacon_ambient", 1.0F, 1.0F);
-            }
+            if (effectSetCooldown > 0) effectSetCooldown--;
         }
     }
 
@@ -153,7 +169,50 @@ public abstract class AbstractSuperBeaconTileEntity extends TileEntity {
     }
 
     public String getNameForGui() {
-        return "container.witherstormmod.withered_beacon";
+        return customName == null || customName.isEmpty()
+                ? "container.witherstormmod.withered_beacon" : customName;
+    }
+
+    public void setCustomName(String name) {
+        customName = name;
+        markAndNotify();
+    }
+
+    public boolean hasCustomName() {
+        return customName != null && !customName.isEmpty();
+    }
+
+    public ITextComponent getDisplayName() {
+        return hasCustomName() ? new TextComponentString(customName)
+                : new TextComponentTranslation("container.witherstormmod.withered_beacon");
+    }
+
+    public boolean isLocked() {
+        return !lockCode.isEmpty();
+    }
+
+    public LockCode getLockCode() {
+        return lockCode;
+    }
+
+    public void setLockCode(LockCode code) {
+        lockCode = code == null ? LockCode.EMPTY_CODE : code;
+        markAndNotify();
+    }
+
+    public boolean canPlayerUseItems(EntityPlayer player) {
+        if (!isLocked()) return true;
+        ItemStack held = player.getHeldItemMainhand();
+        if (!held.isEmpty() && held.hasDisplayName()
+                && lockCode.getLock().equals(held.getDisplayName())) {
+            return true;
+        }
+        if (!world.isRemote) {
+            player.sendStatusMessage(new TextComponentTranslation("container.isLocked", getDisplayName()), true);
+            world.playSound(null, player.posX, player.posY, player.posZ,
+                    SoundEvents.BLOCK_CHEST_LOCKED, SoundCategory.BLOCKS, 1.0F, 1.0F);
+        }
+        return false;
     }
 
     public int getField(int id) {
@@ -214,6 +273,10 @@ public abstract class AbstractSuperBeaconTileEntity extends TileEntity {
         compound.setInteger("Primary", effect == null ? -1 : Potion.getIdFromPotion(effect));
         compound.setBoolean("ShowWorkingArea", showWorkingArea);
         compound.setInteger("Cooldown", effectSetCooldown);
+        if (customName != null && !customName.isEmpty()) {
+            compound.setString("CustomName", customName);
+        }
+        lockCode.toNBT(compound);
         return compound;
     }
 
@@ -230,6 +293,9 @@ public abstract class AbstractSuperBeaconTileEntity extends TileEntity {
         effect = effectId < 0 ? null : Potion.getPotionById(effectId);
         showWorkingArea = compound.getBoolean("ShowWorkingArea");
         effectSetCooldown = Math.max(0, compound.getInteger("Cooldown"));
+        customName = compound.hasKey("CustomName", 8)
+                ? compound.getString("CustomName") : null;
+        lockCode = LockCode.fromNBT(compound);
     }
 
     @Override

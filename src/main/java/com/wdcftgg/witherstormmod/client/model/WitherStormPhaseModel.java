@@ -1,21 +1,32 @@
 package com.wdcftgg.witherstormmod.client.model;
 
+import com.wdcftgg.witherstormmod.client.WitherStormClientConfig;
 import com.wdcftgg.witherstormmod.client.model.witherstorm.CommandBlockGeometry;
 import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.CubeDeformation;
 import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders.PartDefinition;
 import com.wdcftgg.witherstormmod.client.model.witherstorm.WitherStormModelDefinitions;
+import com.wdcftgg.witherstormmod.client.render.WitherStormRenderer;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
+import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntPredicate;
 
 public class WitherStormPhaseModel extends ModelBase {
+    private static final int[] GEOMETRY_TO_HEAD = {2, 0, 1};
+    private static final float[] HEAD_ANIMATION_OFFSETS = {0.0F, 175.0F, 100.0F};
+    private static final float MAXIMUM_LATE_HEAD_YAW = 80.0F;
+
     public enum Form {
         COMMAND_BLOCK,
         HUNCHBACK_1,
@@ -148,40 +159,141 @@ public class WitherStormPhaseModel extends ModelBase {
     public void render(Entity entity, float limbSwing, float limbSwingAmount, float age, float yaw, float pitch, float scale) {
         WitherStormEntity storm = (WitherStormEntity) entity;
         animate(storm, age, yaw, pitch);
-        if (commandBlockBase != null) commandBlockBase.render(scale);
-
-        if (mass != null) {
+        if (commandBlockBase != null) {
             GlStateManager.pushMatrix();
-            applyMassTransform();
-            mass.render(scale);
+            applyMirroredTransform(storm);
+            commandBlockBase.render(scale);
             GlStateManager.popMatrix();
         }
 
-        float headScale = headScale();
-        for (int i = 0; i < heads.size(); i++) {
-            if (storm.areOtherHeadsDisabled() && i != 1 && heads.size() == 3) continue;
-            GlStateManager.pushMatrix();
-            GlStateManager.scale(headScale, headScale, headScale);
-            heads.get(i).render(scale);
-            GlStateManager.popMatrix();
-        }
+        renderMass(storm, scale);
+        renderHeads(storm, scale, head -> true);
 
         for (TentacleParts tentacle : tentacles) {
             GlStateManager.pushMatrix();
+            applyMirroredTransform(storm);
             float tentacleScale = tentacle.scale;
             GlStateManager.scale(tentacleScale, tentacleScale, tentacleScale);
             if (rotatesEarlyMass()) GlStateManager.rotate(20.0F, 1.0F, 0.0F, 0.0F);
             tentacle.base.render(scale);
             GlStateManager.popMatrix();
         }
+
+        renderTornEntrance(storm);
+    }
+
+    /** Upstream TornEvolvedDevourer mass decal that visually closes the bowels entrance. */
+    private void renderTornEntrance(WitherStormEntity storm) {
+        if (form != Form.TORN_EVOLVED_DEVOURER || storm.getHealth() <= 0.0F) return;
+
+        boolean textureEnabled = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
+        boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
+        boolean blendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        GlStateManager.pushMatrix();
+        try {
+            applyMirroredTransform(storm);
+            applyMassTransform();
+
+            float topZOffset = 0.4F;
+            float stretch = 1.1F;
+            if (shouldUseLowResMass(storm)) {
+                topZOffset = 0.45F;
+                stretch = 1.4F;
+                GlStateManager.translate(-0.12F, -2.0F, -0.8F);
+            } else {
+                GlStateManager.translate(-0.12F, -2.0F, -0.9F);
+            }
+
+            GlStateManager.disableTexture2D();
+            GlStateManager.disableLighting();
+            GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE, GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ZERO);
+
+            float size = 0.35F;
+            float halfWidth = size * stretch;
+            float red = 0.5F;
+            float green = 0.3F;
+            float blue = 0.8F;
+            float alpha = 0.2F;
+            Tessellator tessellator = Tessellator.getInstance();
+            BufferBuilder buffer = tessellator.getBuffer();
+            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+            entranceVertex(buffer, halfWidth, size, 0.0F, red, green, blue, alpha);
+            entranceVertex(buffer, halfWidth, -size, -topZOffset, red, green, blue, alpha);
+            entranceVertex(buffer, -halfWidth, -size, -topZOffset, red, green, blue, alpha);
+            entranceVertex(buffer, -halfWidth, size, 0.0F, red, green, blue, alpha);
+            entranceVertex(buffer, -halfWidth, size, 0.0F, red, green, blue, alpha);
+            entranceVertex(buffer, -halfWidth, -size, -topZOffset, red, green, blue, alpha);
+            entranceVertex(buffer, halfWidth, -size, -topZOffset, red, green, blue, alpha);
+            entranceVertex(buffer, halfWidth, size, 0.0F, red, green, blue, alpha);
+            tessellator.draw();
+        } finally {
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            if (!blendEnabled) GlStateManager.disableBlend();
+            if (lightingEnabled) GlStateManager.enableLighting();
+            if (textureEnabled) GlStateManager.enableTexture2D();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.popMatrix();
+        }
+    }
+
+    private static void entranceVertex(BufferBuilder buffer, float x, float y, float z,
+                                       float red, float green, float blue, float alpha) {
+        buffer.pos(x, y, z).color(red, green, blue, alpha).endVertex();
+    }
+
+    public void renderHeads(WitherStormEntity storm, float scale, IntPredicate predicate) {
+        float scaleForHead = headScale();
+        for (int geometryIndex = 0; geometryIndex < heads.size(); geometryIndex++) {
+            int head = logicalHead(geometryIndex);
+            if (!predicate.test(head) || storm.areOtherHeadsDisabled() && head != 0) continue;
+            GlStateManager.pushMatrix();
+            GlStateManager.scale(scaleForHead, scaleForHead, scaleForHead);
+            heads.get(geometryIndex).render(scale);
+            GlStateManager.popMatrix();
+        }
+    }
+
+    public void renderMass(WitherStormEntity storm, float scale) {
+        if (mass == null) return;
+        GlStateManager.pushMatrix();
+        applyMirroredTransform(storm);
+        applyMassTransform();
+        (shouldUseLowResMass(storm) && lowResMass != null ? lowResMass : mass).render(scale);
+        GlStateManager.popMatrix();
+    }
+
+    private int logicalHead(int geometryIndex) {
+        return heads.size() == 3
+                ? GEOMETRY_TO_HEAD[Math.min(geometryIndex, GEOMETRY_TO_HEAD.length - 1)] : 0;
+    }
+
+    public void renderSantaHats(WitherStormEntity storm, SantaHatModel santaHat, float scale) {
+        float scaleForHead = headScale();
+        for (int i = 0; i < heads.size(); i++) {
+            if (storm.areOtherHeadsDisabled() && logicalHead(i) != 0) continue;
+            GlStateManager.pushMatrix();
+            GlStateManager.scale(scaleForHead, scaleForHead, scaleForHead);
+            heads.get(i).postRender(scale);
+            santaHat.render(storm, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, scale);
+            GlStateManager.popMatrix();
+        }
+    }
+
+    private static void applyMirroredTransform(WitherStormEntity storm) {
+        GlStateManager.scale(storm.isMirrored() ? -1.0F : 1.0F, 1.0F, 1.0F);
     }
 
     private void animate(WitherStormEntity storm, float age, float yaw, float pitch) {
+        float partialTicks = MathHelper.clamp(age - storm.ticksExisted, 0.0F, 1.0F);
         if (commandBlockBase != null) {
             PartDefinition base = rootDefinition.child("witherBase");
             ModelRenderer ribcage = renderer(base.child("ribcage"));
             ModelRenderer tail = renderer(base.child("tail"));
-            float wave = MathHelper.sin(age * 0.1F);
+            float wave = MathHelper.cos(age * 0.1F);
             if (ribcage != null) ribcage.rotateAngleX = (0.065F + 0.05F * wave) * (float) Math.PI;
             if (tail != null && ribcage != null) {
                 tail.setRotationPoint(-2.0F, 6.9F + MathHelper.cos(ribcage.rotateAngleX) * 10.0F,
@@ -193,52 +305,67 @@ public class WitherStormPhaseModel extends ModelBase {
                 center.rotateAngleY = yaw * ((float) Math.PI / 180.0F);
                 center.rotateAngleX = pitch * ((float) Math.PI / 180.0F);
             }
-            animateVanillaSideHead(storm, renderer(base.child("left_head")), 1);
-            animateVanillaSideHead(storm, renderer(base.child("right_head")), 0);
+            animateVanillaSideHead(storm, renderer(base.child("left_head")), 1, partialTicks);
+            animateVanillaSideHead(storm, renderer(base.child("right_head")), 2, partialTicks);
         }
 
         for (int i = 0; i < heads.size(); i++) {
             ModelRenderer head = heads.get(i);
-            int headIndex = heads.size() == 3 ? new int[]{2, 0, 1}[i] : 0;
-            if (headIndex == 0) {
-                head.rotateAngleY = (float) Math.PI + yaw * ((float) Math.PI / 180.0F);
-                head.rotateAngleX = -pitch * ((float) Math.PI / 180.0F);
-            } else {
-                animateCommandSideHead(storm, head, headIndex);
-            }
+            int headIndex = logicalHead(i);
+            animateStormHead(storm, head, headIndex, partialTicks);
             PartDefinition headDefinition = rootDefinition.child("heads").child("head" + i);
             ModelRenderer lower = renderer(headDefinition == null ? null : headDefinition.child("lowerJaw"));
             if (lower != null) {
-                float partialTicks = MathHelper.clamp(age - storm.ticksExisted, 0.0F, 1.0F);
-                float hinge = storm.getMouthAnimation(headIndex, partialTicks) * 0.3F;
-                lower.rotateAngleX = MathHelper.sin(hinge) * 10.0F - 10.0F
-                        + (0.065F + 0.02F * MathHelper.sin((age + i * 75.0F) * 0.1F)) * (float) Math.PI - 0.5F;
-                lower.rotateAngleZ = storm.getBrokenJawAnimation(headIndex, partialTicks);
+                float ticks = storm.isDeadOrPlayingDead() ? 0.0F : age;
+                lower.rotateAngleX = WitherStormHeadAnimation.jawPitch(
+                        storm.getMouthAnimation(headIndex, partialTicks), ticks,
+                        HEAD_ANIMATION_OFFSETS[MathHelper.clamp(headIndex, 0,
+                                HEAD_ANIMATION_OFFSETS.length - 1)]);
+                lower.rotateAngleZ = WitherStormHeadAnimation.brokenJawRoll(storm, headIndex,
+                        storm.getBrokenJawAnimation(headIndex, partialTicks));
                 head.rotateAngleZ = storm.getHeadShakeAnimation(headIndex, partialTicks);
             }
         }
 
         for (int i = 0; i < tentacles.size(); i++) {
-            tentacles.get(i).animate(age);
+            tentacles.get(i).animate(storm.getTentacleAnimation(partialTicks));
         }
     }
 
-    private static void animateCommandSideHead(WitherStormEntity storm, ModelRenderer head, int index) {
+    private static void animateStormHead(WitherStormEntity storm, ModelRenderer head,
+                                         int index, float partialTicks) {
         if (head == null) return;
-        head.rotateAngleY = (storm.getHeadYRotation(index - 1) - storm.renderYawOffset) * ((float) Math.PI / 180.0F) + (float) Math.PI;
-        head.rotateAngleX = -storm.getHeadXRotation(index - 1) * ((float) Math.PI / 180.0F);
+        float relativeYaw = MathHelper.wrapDegrees(storm.getHeadYRotation(index, partialTicks)
+                - interpolateBodyYaw(storm, partialTicks));
+        if (storm.getPhase() > 3 && !storm.isDeadOrPlayingDead()) {
+            relativeYaw = MathHelper.clamp(relativeYaw,
+                    -MAXIMUM_LATE_HEAD_YAW, MAXIMUM_LATE_HEAD_YAW);
+        }
+        head.rotateAngleY = relativeYaw * ((float) Math.PI / 180.0F) + (float) Math.PI;
+        head.rotateAngleX = -storm.getHeadXRotation(index, partialTicks)
+                * ((float) Math.PI / 180.0F);
     }
 
-    private static void animateVanillaSideHead(WitherStormEntity storm, ModelRenderer head, int sideIndex) {
+    private static void animateVanillaSideHead(WitherStormEntity storm, ModelRenderer head,
+                                               int sideIndex, float partialTicks) {
         if (head == null) return;
-        head.rotateAngleY = (storm.getHeadYRotation(sideIndex) - storm.renderYawOffset) * ((float) Math.PI / 180.0F);
-        head.rotateAngleX = storm.getHeadXRotation(sideIndex) * ((float) Math.PI / 180.0F);
+        head.rotateAngleY = (storm.getHeadYRotation(sideIndex, partialTicks)
+                - interpolateBodyYaw(storm, partialTicks))
+                * ((float) Math.PI / 180.0F) + (float) Math.PI;
+        head.rotateAngleX = -storm.getHeadXRotation(sideIndex, partialTicks)
+                * ((float) Math.PI / 180.0F);
+    }
+
+    private static float interpolateBodyYaw(WitherStormEntity storm, float partialTicks) {
+        return storm.prevRenderYawOffset
+                + MathHelper.wrapDegrees(storm.renderYawOffset - storm.prevRenderYawOffset)
+                * partialTicks;
     }
 
     private void applyMassTransform() {
         if (isLateForm()) {
             GlStateManager.scale(10.0F, 10.0F, 10.0F);
-        } else if (form == Form.GROWING_HUNCHBACK) {
+        } else if (form == Form.GROWING_HUNCHBACK || form == Form.HUNCHBACK_2_1) {
             GlStateManager.scale(1.001F, 1.001F, 1.001F);
         }
         if (rotatesEarlyMass()) GlStateManager.rotate(20.0F, 1.0F, 0.0F, 0.0F);
@@ -261,6 +388,24 @@ public class WitherStormPhaseModel extends ModelBase {
 
     public ModelRenderer getLowResMass() {
         return lowResMass;
+    }
+
+    /** 上游 lowResModelsEnabled：低分辨率质量模型开关与远距离 LOD。 */
+    public boolean shouldUseLowResMass(WitherStormEntity storm) {
+        return lowResMass != null && (WitherStormClientConfig.lowResModels
+                || WitherStormClientConfig.witherStormLOD
+                && WitherStormRenderer.isDistantStorm(storm));
+    }
+
+    /** 风暴被撕裂时的脉冲方块（上游 WitherStormPulseLayer 在 4.2.1 的等效实现）。 */
+    public void renderPulse(WitherStormEntity storm, float partialTicks, float scale) {
+        if (mass == null) return;
+        ModelRenderer renderedMass = shouldUseLowResMass(storm) ? lowResMass : mass;
+        WitherStormPulseModelHelper.render(storm, storm.getPhase(), 15,
+                WitherStormClientConfig.lowResModels, renderedMass, partialTicks, scale, () -> {
+                    applyMirroredTransform(storm);
+                    applyMassTransform();
+                });
     }
 
     static final class TentacleParts {
@@ -286,8 +431,8 @@ public class WitherStormPhaseModel extends ModelBase {
         }
 
         void animate(float age) {
-            float f = MathHelper.sin((age + animationOffset * 10.0F) * animationSpeed * 0.1F) * reach;
-            float s = MathHelper.cos((age + animationOffset * 10.0F) * animationSpeed * 0.05F) * reach;
+            float f = MathHelper.cos((age + animationOffset * 10.0F) * animationSpeed * 0.1F) * reach;
+            float s = MathHelper.sin((age + animationOffset * 10.0F) * animationSpeed * 0.05F) * reach;
             base.rotateAngleY = s * f * 0.05F + yRotationalOffset;
             base.rotateAngleX = f * s * 0.05F + xRotationalOffset;
             if (segments[0] != null) segments[0].rotateAngleX = f * -0.1F;

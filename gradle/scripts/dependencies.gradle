@@ -25,6 +25,7 @@ dependencies {
     modImplementation 'mezz:jei:4.32.0:dev'
 
     modImplementation 'curse.maven:future-mc-310059:6162819'
+    modImplementation 'curse.maven:Fugue-1005815:8403977'
     modRuntimeOnly('io.github.chaosunity.forgelin:Forgelin-Continuous:2.0.0.0') {
         transitive = false
     }

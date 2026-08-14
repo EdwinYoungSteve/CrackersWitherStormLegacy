@@ -8,6 +8,8 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import java.util.Random;
+
 public class TaintedGlassPaneBlock extends BlockPane {
 
     public TaintedGlassPaneBlock(String name) {
@@ -24,6 +26,12 @@ public class TaintedGlassPaneBlock extends BlockPane {
     @Override
     protected boolean canSilkHarvest() {
         return true;
+    }
+
+    @Override
+    public int quantityDropped(Random random) {
+        // 与上游一致：凋零玻璃板只有精准采集才掉落。
+        return 0;
     }
 
     @Override

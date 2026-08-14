@@ -1,16 +1,31 @@
 package com.wdcftgg.witherstormmod.common.entity;
 
+import com.wdcftgg.witherstormmod.api.common.event.CanWitherStormTargetMobEvent;
 import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
+import com.wdcftgg.witherstormmod.common.capability.WitherSicknessCapability;
+import com.wdcftgg.witherstormmod.common.capability.WitherSicknessTracker;
 import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
+import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
+import com.wdcftgg.witherstormmod.common.resource.UpstreamEntityTags;
+import com.wdcftgg.witherstormmod.common.util.TractorBeamHelper;
+import com.wdcftgg.witherstormmod.common.util.WorldUtil;
+import net.minecraft.entity.item.EntityFireworkRocket;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.ForgeEventFactory;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -24,6 +39,8 @@ import java.util.Random;
  * 1.12 客户端。
  */
 public final class WitherStormHeadManager {
+    private static final int ENTITY_DISTRACTION_UNSEEN_LIMIT = 180;
+    private static final float MAXIMUM_LATE_HEAD_YAW = 80.0F;
     private static final double[][][] OFFSETS = {
             {{0, 3, 0}, {-1.3, 2.2, 0}, {1.3, 2.2, 0}},
             {{0, 3, 0}, {-1.3, 2.2, 0}, {1.3, 2.2, 0}},
@@ -37,24 +54,35 @@ public final class WitherStormHeadManager {
 
     private final WitherStormEntity storm;
     private final HeadState[] heads = {new HeadState(), new HeadState(), new HeadState()};
-    private final boolean[] jawMirror = new boolean[3];
+    /** 性能优化：3 个头共享每 tick 单次目标候选扫描（检测机制与上游一致）。 */
+    private List<EntityLivingBase> targetCandidates = java.util.Collections.emptyList();
+    private int idleTargetTicks;
 
     WitherStormHeadManager(WitherStormEntity storm) {
         this.storm = storm;
-        Random random = new Random(storm.getEntityId() * 31L + 17L);
-        for (int i = 0; i < jawMirror.length; i++) jawMirror[i] = random.nextBoolean();
+        for (int i = 0; i < heads.length; i++) {
+            heads[i].requiredHits = 1 + storm.getRNG().nextInt(2);
+        }
     }
 
     public void tick() {
         int flags = storm.getHeadAnimationFlags();
         for (int index = 0; index < heads.length; index++) {
             HeadState head = heads[index];
+            if (storm.world.isRemote && head.hurtOverlayTicks > 0) head.hurtOverlayTicks--;
             head.positionO = head.position;
             head.position = calculatePosition(index);
             head.yawO = head.yaw;
             head.pitchO = head.pitch;
-            updateLook(index, head);
-            updateBeamCutoff(head);
+            if (storm.world.isRemote) {
+                head.yaw = storm.getSyncedHeadYaw(index);
+                head.pitch = storm.getSyncedHeadPitch(index);
+            } else {
+                updateLook(index, head);
+                constrainLateHeadYaw(head);
+                storm.updateHeadRotation(index, head.yaw, head.pitch);
+            }
+            updateBeamCutoff(index, head);
             head.mouthO = head.mouth;
             head.brokenO = head.broken;
             head.shakeO = head.shake;
@@ -82,7 +110,10 @@ public final class WitherStormHeadManager {
                 head.shake += 0.02F + storm.getRNG().nextFloat() * 0.05F;
                 if (head.shakeO >= 2.0F) {
                     head.shakeO = head.shake = 0.0F;
-                    if (!storm.world.isRemote) storm.setHeadFlag(shakeBit(index), false);
+                    if (!storm.world.isRemote) {
+                        storm.setHeadFlag(shakeBit(index), false);
+                        head.nextShake = 20 + storm.getRNG().nextInt(20);
+                    }
                 }
             } else if (head.shake != 0.0F) {
                 head.shakeO = head.shake = 0.0F;
@@ -92,24 +123,41 @@ public final class WitherStormHeadManager {
     }
 
     private void serverTick() {
+        if (storm.getInvulnerableTicks() > 0 || storm.isDeadOrPlayingDead()) {
+            for (int index = 0; index < heads.length; index++) {
+                heads[index].target = null;
+                storm.updateWatchedTargetId(index, 0);
+            }
+            storm.setAttackTarget(null);
+            idleTargetTicks = 0;
+            return;
+        }
+        tickDistractions();
+        // 性能优化：3 个头共享每 tick 单次目标候选扫描，避免各自全加载区扫描
+        targetCandidates = scanTargetCandidates();
         for (int index = 0; index < heads.length; index++) {
             HeadState head = heads[index];
             boolean enabled = isEnabled(index);
-            if (head.injuryTicks > 0 && --head.injuryTicks == 0) {
-                storm.setHeadInjuryFlag(index, false);
-                if (!storm.isDeadOrPlayingDead()) storm.playHeadTractorBeamActivationSound(index);
+            if (head.injuryTicks > 0) {
+                if (--head.injuryTicks == 0) {
+                    storm.setHeadInjuryFlag(index, false);
+                    if (!storm.isDeadOrPlayingDead()) storm.playHeadTractorBeamActivationSound(index);
+                } else if (head.nextShake > 0 && --head.nextShake == 0) {
+                    storm.setHeadFlag(shakeBit(index), true);
+                }
             }
             if (head.injuryCooldown > 0) head.injuryCooldown--;
 
-            EntityLivingBase target = head.injuryTicks > 0 ? null : selectTarget(index);
-            head.target = target;
+            EntityLivingBase target = head.injuryTicks > 0 || head.isDistracted() ? null
+                    : selectTarget(index, targetCandidates);
+            if (head.target != target) {
+                head.target = target;
+                head.targetUnseenTicks = 0;
+                head.lastTargetPosition = null;
+            }
+            if (index == 0 && storm.getAttackTarget() != target) storm.setAttackTarget(target);
             storm.updateWatchedTargetId(index, target == null || !enabled ? 0 : target.getEntityId());
 
-            if (storm.getInvulnerableTicks() > 0) {
-                head.target = null;
-                storm.updateWatchedTargetId(index, 0);
-                continue;
-            }
             if (storm.isHeadFlagSet(roarBit(index)) && ++head.roarTicks > 40) {
                 head.roarTicks = 0;
                 storm.setHeadFlag(roarBit(index), false);
@@ -119,52 +167,231 @@ public final class WitherStormHeadManager {
                 storm.setHeadFlag(biteBit(index), false);
                 storm.playHeadBiteSound(index);
             }
-            if (head.nextRoar <= 0) head.nextRoar = nextRoarDelay();
-            if (--head.nextRoar <= 0 && !storm.isDeadOrPlayingDead() && enabled) {
-                head.nextRoar = nextRoarDelay();
-                if (storm.tractorBeamActive(index) && !storm.isAttractingFormidibomb()) {
+            if (!head.roarScheduleInitialized) {
+                head.nextRoar = 201 + storm.getRNG().nextInt(200);
+                head.roarScheduleInitialized = true;
+            } else if (--head.nextRoar <= 0) {
+                head.nextRoar = nextRoarDelay() + 1;
+                boolean canShootFlamingSkull = storm.tractorBeamActive(index)
+                        || index == 0 && storm.getPhase() < 4 && target != null;
+                if (canShootFlamingSkull && !storm.isAttractingFormidibomb()) {
                     Vec3d look = getLookVector(head);
                     storm.spawnFlamingWitherSkull(index, head.position.x + look.x,
                             head.position.y + look.y, head.position.z + look.z);
                 }
-                storm.setHeadFlag(roarBit(index), true);
-                storm.playHeadRoarSound(index);
+                startRoar(index, head.injuryTicks > 0);
             }
             if (storm.tractorBeamActive(index) && storm.getPhase() >= 2
-                    && head.nextClusterPickup <= 0) {
-                head.nextClusterPickup = nextClusterPickupDelay();
+                    && storm.ticksExisted >= head.nextClusterPickup) {
+                head.nextClusterPickup = storm.ticksExisted + nextClusterPickupDelay();
                 storm.createClusterFromLook(head.pitch, head.yaw, storm.getClusterRadius(), index);
                 storm.removeFluidFromLook(head.pitch, head.yaw, index);
             }
-            if (head.nextClusterPickup > 0) head.nextClusterPickup--;
             if (!enabled || head.injuryTicks > 0 || storm.isDeadOrPlayingDead()) continue;
 
-            if (head.nextAttack <= 0) {
-                head.nextAttack = storm.getPhase() < 4
-                        ? 10 + storm.getRNG().nextInt(10)
-                        : 1200 + storm.getRNG().nextInt(120);
+            if (storm.ticksExisted < head.nextHeadUpdate) continue;
+            if (storm.getPhase() < 4) {
+                head.nextHeadUpdate = storm.ticksExisted + 10 + storm.getRNG().nextInt(10);
+            } else {
+                head.nextHeadUpdate = storm.ticksExisted + 1200 + storm.getRNG().nextInt(120);
             }
-            if (--head.nextAttack > 0) continue;
-            if (target != null && !storm.isDistracted()) {
+            int idleHeadUpdates = head.idleAttacks++;
+            if (idleHeadUpdates > 15) {
+                if (!storm.tractorBeamActive(index)) {
+                    Vec3d origin = head.position;
+                    storm.performRangedAttack(index,
+                            WitherStormPartLogic.randomBetween(
+                                    storm.getRNG(), origin.x - 10.0D, origin.x + 10.0D),
+                            WitherStormPartLogic.randomBetween(
+                                    storm.getRNG(), origin.y - 5.0D, origin.y + 5.0D),
+                            WitherStormPartLogic.randomBetween(
+                                    storm.getRNG(), origin.z - 10.0D, origin.z + 10.0D), true);
+                }
+                head.idleAttacks = 0;
+            }
+            if (target != null && !head.isDistracted()) {
                 if (!storm.tractorBeamActive(index)) {
                     storm.performRangedAttack(index, target);
                 }
-                head.nextAttack = storm.getPhase() < 4
+                head.nextHeadUpdate = storm.ticksExisted + (storm.getPhase() < 4
                         ? 40 + storm.getRNG().nextInt(20)
-                        : 1800 + storm.getRNG().nextInt(160);
-            } else if (head.idleAttacks++ > 15 && !storm.tractorBeamActive(index)) {
-                Vec3d origin = head.position;
-                storm.performRangedAttack(index, origin.x + storm.getRNG().nextInt(21) - 10.0D,
-                        origin.y + storm.getRNG().nextInt(11) - 5.0D,
-                        origin.z + storm.getRNG().nextInt(21) - 10.0D, true);
+                        : 1800 + storm.getRNG().nextInt(160));
                 head.idleAttacks = 0;
-                head.nextAttack = 40 + storm.getRNG().nextInt(20);
             } else {
-                head.nextAttack = 40 + storm.getRNG().nextInt(20);
+                head.nextHeadUpdate = storm.ticksExisted + 40 + storm.getRNG().nextInt(20);
             }
-            if (target != null && head.position.squareDistanceTo(target.getPositionVector()) < 36.0D
-                    && !storm.isHeadFlagSet(biteBit(index))) startBiting(index);
         }
+        tickMainTargetTimeout();
+    }
+
+    private void tickMainTargetTimeout() {
+        if (heads[0].target != null) ++idleTargetTicks;
+        if (idleTargetTicks > 1800 || heads[0].target == null) {
+            setTarget(0, null);
+            idleTargetTicks = 0;
+        }
+    }
+
+    /** 处理上游的烟花实体和牵引光束方块分心目标。 */
+    private void tickDistractions() {
+        for (int index = 0; index < heads.length; index++) {
+            HeadState head = heads[index];
+            if (head.distractionTicks > 0) {
+                tickActiveDistraction(index, head);
+                continue;
+            }
+            clearDistraction(index, head);
+            if (head.nextDistractionCheck > 0) head.nextDistractionCheck--;
+            if (!canStartEntityDistraction(index)) continue;
+
+            if (storm.getRNG().nextInt(2) == 0) {
+                EntityFireworkRocket firework = findFirework(index);
+                if (firework != null) {
+                    startEntityDistraction(index, head, firework);
+                    continue;
+                }
+            }
+
+            if (head.nextDistractionCheck > 0 || !canStartBlockDistraction(index)) continue;
+            BlockPos block = findDistractionBlock(index);
+            if (block != null) {
+                Vec3d position = new Vec3d(block).add(0.5D, 0.5D, 0.5D);
+                if (storm.isPositionBehindBack(position)) continue;
+                boolean overlapsOtherHead = false;
+                for (int otherIndex = 0; otherIndex < heads.length; otherIndex++) {
+                    Vec3d otherPosition = heads[otherIndex].distractionPosition;
+                    if (otherIndex != index && otherPosition != null
+                            && otherPosition.squareDistanceTo(position) < 100.0D
+                            && storm.getRNG().nextInt(5) != 0) {
+                        overlapsOtherHead = true;
+                        break;
+                    }
+                }
+                if (overlapsOtherHead) {
+                    head.nextDistractionCheck = 60;
+                    continue;
+                }
+                head.distractionPosition = position;
+                head.distractionTicks = 120 + storm.getRNG().nextInt(60);
+                storm.setHeadDistractionFlag(index, true);
+            }
+        }
+    }
+
+    private void tickActiveDistraction(int index, HeadState head) {
+        --head.distractionTicks;
+        if (head.distractionEntity == null) {
+            if (head.distractionTicks == 0) clearDistraction(index, head);
+            return;
+        }
+
+        Entity distractionEntity = resolveEntity(head.distractionEntity);
+        if (distractionEntity == null || distractionEntity.isDead) {
+            if (head.distractionPosition != null && storm.getRNG().nextInt(8) == 0) {
+                head.distractionPosition = head.distractionPosition.add(storm.getRNG().nextGaussian(),
+                        storm.getRNG().nextGaussian(), storm.getRNG().nextGaussian());
+            }
+            EntityFireworkRocket replacement = canStartEntityDistraction(index) ? findFirework(index) : null;
+            if (replacement != null && !replacement.getUniqueID().equals(head.distractionEntity)) {
+                startEntityDistraction(index, head, replacement);
+            } else if (head.distractionTicks == 0) {
+                clearDistraction(index, head);
+            }
+            return;
+        }
+
+        if (head.distractionTicks > 0) return;
+        double followDistance = storm.getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
+        if (storm.getDistanceSq(distractionEntity) > followDistance * followDistance) {
+            clearDistraction(index, head);
+            return;
+        }
+        if (storm.canSeeWithCache(index, distractionEntity)) {
+            head.distractionUnseenTicks = 0;
+        } else if (head.distractionUnseenTicks++ > ENTITY_DISTRACTION_UNSEEN_LIMIT) {
+            clearDistraction(index, head);
+            return;
+        }
+        head.distractionPosition = distractionEntity.getPositionVector().add(0.0D, 10.0D, 0.0D);
+        head.distractionTicks = 80 + storm.getRNG().nextInt(80);
+    }
+
+    private void startEntityDistraction(int index, HeadState head, EntityFireworkRocket firework) {
+        head.distractionEntity = firework.getUniqueID();
+        head.distractionPosition = firework.getPositionVector().add(0.0D, 10.0D, 0.0D);
+        head.distractionTicks = 80 + storm.getRNG().nextInt(80);
+        head.distractionUnseenTicks = 0;
+        storm.setHeadDistractionFlag(index, true);
+    }
+
+    private void clearDistraction(int index, HeadState head) {
+        head.clearDistraction();
+        storm.setHeadDistractionFlag(index, false);
+    }
+
+    private boolean canStartEntityDistraction(int index) {
+        HeadState head = heads[index];
+        return storm.getPhase() > 3 && !storm.isDeadOrPlayingDead() && head.injuryTicks <= 0
+                && storm.tractorBeamActive(index);
+    }
+
+    private boolean canStartBlockDistraction(int index) {
+        if (!canStartEntityDistraction(index)) return false;
+        HeadState head = heads[index];
+        EntityLivingBase target = head.target;
+        return target == null || !TractorBeamHelper.isInsideTractorBeam(target.getPositionVector(),
+                head.position, getLookVector(head), head.beamCutoff, 4.0D);
+    }
+
+    @Nullable
+    private EntityFireworkRocket findFirework(int index) {
+        HeadState head = heads[index];
+        double followDistance = storm.getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
+        List<EntityFireworkRocket> fireworks = storm.world.getEntitiesWithinAABB(EntityFireworkRocket.class,
+                storm.getSearchBox(), entity -> !entity.isDead && storm.canSeeWithCache(index, entity)
+                        && !storm.isEntityBehindBack(entity)
+                        && storm.getDistanceSq(entity) <= followDistance * followDistance);
+        EntityFireworkRocket nearest = null;
+        double distance = Double.MAX_VALUE;
+        for (EntityFireworkRocket firework : fireworks) {
+            double current = firework.getDistanceSq(head.position.x, head.position.y, head.position.z);
+            if (current < distance) {
+                distance = current;
+                nearest = firework;
+            }
+        }
+        return nearest;
+    }
+
+    @Nullable
+    private BlockPos findDistractionBlock(int index) {
+        if (!ForgeEventFactory.getMobGriefingEvent(storm.world, storm)) return null;
+        HeadState head = heads[index];
+        Vec3d end = head.position.add(getLookVector(head).scale(200.0D));
+        RayTraceResult hit = storm.world.rayTraceBlocks(head.position, end, false, true, false);
+        BlockPos beamEnd = hit == null || hit.typeOfHit == RayTraceResult.Type.MISS
+                ? new BlockPos(end) : hit.getBlockPos();
+        BlockPos origin = beamEnd.add(storm.getRNG().nextInt(9) - 4,
+                storm.getRNG().nextInt(9) - 4, storm.getRNG().nextInt(9) - 4);
+        if (!storm.world.isBlockLoaded(origin)) return null;
+        int searchRadius = Math.max(4, WitherStormConfig.tractorBeamBlockSearchRadius);
+        return WorldUtil.findLoadedBlockSpiralOutwards(storm.world, origin, searchRadius,
+                state -> UpstreamBlockTags.contains(
+                        UpstreamBlockTags.TRACTOR_BEAM_DISTRACTION_BLOCKS, state));
+    }
+
+    @Nullable
+    private Entity resolveEntity(@Nullable java.util.UUID uuid) {
+        if (uuid == null) return null;
+        // 性能优化：服务端用 O(1) UUID 索引，避免活跃分心时每 tick 全量遍历实体列表
+        if (storm.world instanceof net.minecraft.world.WorldServer) {
+            Entity resolved = ((net.minecraft.world.WorldServer) storm.world).getEntityFromUuid(uuid);
+            if (resolved != null) return resolved;
+        }
+        for (Entity entity : storm.world.loadedEntityList) {
+            if (uuid.equals(entity.getUniqueID())) return entity;
+        }
+        return null;
     }
 
     private int nextClusterPickupDelay() {
@@ -182,78 +409,255 @@ public final class WitherStormHeadManager {
         return minimum + (maximum > minimum ? storm.getRNG().nextInt(maximum - minimum) : 0);
     }
 
-    private void updateBeamCutoff(HeadState head) {
+    private void updateBeamCutoff(int index, HeadState head) {
         if (storm.world.isRemote || head.position == null) return;
-        Vec3d end = head.position.add(getLookVector(head).scale(250.0D));
-        net.minecraft.util.math.RayTraceResult result = storm.world.rayTraceBlocks(head.position, end, false, true, false);
-        head.beamCutoff = result != null && result.typeOfHit == net.minecraft.util.math.RayTraceResult.Type.BLOCK
-                ? head.position.distanceTo(result.hitVec) : -1.0D;
+        if (!storm.tractorBeamActive(index)) {
+            head.beamCutoff = -1.0D;
+            return;
+        }
+        head.beamCutoff = TractorBeamHelper.findCutoffDistance(
+                storm.world, head.position, getLookVector(head), 250.0D);
     }
 
     @Nullable
-    private EntityLivingBase selectTarget(int index) {
+    private EntityLivingBase selectTarget(int index, @Nullable List<EntityLivingBase> candidates) {
         if (!isEnabled(index)) return null;
-        EntityLivingBase main = storm.getUltimateTarget();
-        if (main == null) main = storm.getAttackTarget();
-        if (index == 0) return isTargetApplicable(index, main) ? main : null;
-        List<EntityLivingBase> candidates = storm.world.getEntitiesWithinAABB(EntityLivingBase.class,
-                storm.getEntityBoundingBox().grow(storm.getPhase() > 3 ? 160.0D : 32.0D, 80.0D,
-                        storm.getPhase() > 3 ? 160.0D : 32.0D), entity -> isTargetApplicable(index, entity));
+        if (index == 0 && storm.isAttractingFormidibomb()) return null;
+        HeadState head = heads[index];
+        if (head.isDistracted()) return null;
+
+        EntityLivingBase revengeTarget = index == 0 ? storm.getRevengeTarget() : null;
+        if (revengeTarget != null && revengeTarget != head.target
+                && isRevengeTargetApplicable(revengeTarget)) {
+            countWitherSicknessContact(revengeTarget);
+            return revengeTarget;
+        }
+        if (canContinueTarget(index, head)) return head.target;
+        if (candidates == null) return null;
+
+        boolean preferSpecialTarget = WitherStormConfig.specialTargetingBias
+                && storm.getPlayingJukeboxes().isEmpty()
+                && storm.getRNG().nextInt(100) <= MathHelper.clamp(
+                WitherStormConfig.specialTargetingBiasChance, 0, 100);
         EntityLivingBase nearest = null;
+        EntityLivingBase nearestSpecialTarget = null;
         double distance = Double.MAX_VALUE;
+        double specialTargetDistance = Double.MAX_VALUE;
         for (EntityLivingBase candidate : candidates) {
-            double current = storm.getDistanceSq(candidate);
+            if (!isTargetApplicableForHead(index, candidate)) continue;
+            double current = candidate.getDistanceSq(
+                    storm.posX, storm.posY + storm.getEyeHeight(), storm.posZ);
+            if (preferSpecialTarget
+                    && (UpstreamEntityTags.contains(UpstreamEntityTags.FAVOURABLE_MOBS, candidate)
+                    || candidate instanceof net.minecraft.entity.player.EntityPlayer)
+                    && current < specialTargetDistance) {
+                specialTargetDistance = current;
+                nearestSpecialTarget = candidate;
+            }
+            if (candidate.getEntityBoundingBox().getAverageEdgeLength() <= 0.5D
+                    && candidate.getRNG().nextInt(4) != 0) continue;
             if (current < distance) {
                 distance = current;
                 nearest = candidate;
             }
         }
-        if (nearest != null) return nearest;
-        return storm.getPhase() <= 3 && isTargetApplicable(index, main) ? main : null;
+        EntityLivingBase selected = nearestSpecialTarget == null ? nearest : nearestSpecialTarget;
+        if (selected != null) countWitherSicknessContact(selected);
+        return selected;
     }
 
-    private boolean isTargetApplicable(int index, @Nullable EntityLivingBase entity) {
-        if (!storm.isValidStormTarget(entity, false)
-                || storm.getUltimateTargetManager().shouldIgnoreTarget(entity)
-                || storm.isTrackedForConsumption(entity)
-                || !storm.canSee(index, entity)) {
+    /** 三个头共享当前 tick 的一次目标候选扫描，保持上游逐 tick 选目标语义。 */
+    private List<EntityLivingBase> scanTargetCandidates() {
+        double range = storm.getPhase() > 3
+                ? storm.getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue()
+                : 40.0D;
+        return storm.world.getEntitiesWithinAABB(EntityLivingBase.class,
+                storm.getEntityBoundingBox().grow(range,
+                        storm.getPhase() > 3 ? range + 50.0D : range * 2.0D,
+                        range), this::isTargetApplicableUnfiltered);
+    }
+
+    private boolean isRevengeTargetApplicable(EntityLivingBase entity) {
+        double followDistance = storm.getEntityAttribute(
+                SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue() + 100.0D;
+        return storm.isValidStormTarget(entity, false)
+                && !storm.isOnSameTeam(entity)
+                && storm.getDistanceSq(entity) <= followDistance * followDistance
+                && storm.canSeeWithCache(0, entity);
+    }
+
+    private boolean canContinueTarget(int index, HeadState head) {
+        EntityLivingBase target = head.target;
+        if (target == null || !target.isEntityAlive() || target.world != storm.world
+                || target.dimension != storm.dimension || storm.isOnSameTeam(target)) return false;
+        double followDistance = storm.getEntityAttribute(
+                SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue() + 100.0D;
+        if (storm.getDistanceSq(target) > followDistance * followDistance) return false;
+        if (storm.canSeeWithCache(index, target)) {
+            head.targetUnseenTicks = 0;
+        } else if (++head.targetUnseenTicks > (storm.getPhase() < 4 ? 80 : 20)) {
             return false;
         }
-        if (storm.getPhase() > 3 && (entity.isInvisible()
-                || isTargetedByAnotherHead(entity, index)
-                || storm.isTargetInUseBySegment(entity)
-                || storm.isInsideOtherTractorBeam(entity, index)
-                || storm.isEntityBehindBack(entity))) {
+        if (target instanceof EntityPlayer
+                && (((EntityPlayer) target).capabilities.disableDamage
+                || ((EntityPlayer) target).isSpectator())) return false;
+        if (storm.getPhase() > 3 && storm.isEntityBehindBack(target)) return false;
+        Vec3d position = target.getPositionVector();
+        if (head.lastTargetPosition != null
+                && position.distanceTo(head.lastTargetPosition) > 20.0D) return false;
+        if (storm.isTrackedForConsumption(target)) return false;
+        head.lastTargetPosition = position;
+        return true;
+    }
+
+    private static void countWitherSicknessContact(EntityLivingBase target) {
+        WitherSicknessTracker tracker = WitherSicknessCapability.get(target);
+        if (tracker != null) tracker.countContact();
+    }
+
+    /** 共享候选扫描使用的头无关过滤。 */
+    private boolean isTargetApplicableUnfiltered(EntityLivingBase entity) {
+        if (entity == null || !storm.isValidStormTarget(entity, false)
+                || storm.isOnSameTeam(entity)
+                || storm.getIgnoredTargetsManager().shouldIgnoreTarget(entity)
+                || storm.isTrackedForConsumption(entity)
+                || storm.isPassengerTarget(entity)) {
+            return false;
+        }
+        if (storm.getPhase() > 3 && (entity.isInvisible() || storm.isTargetInUseBySegment(entity))) {
             return false;
         }
         if (entity instanceof EntityPlayer) {
             EntityPlayer player = (EntityPlayer) entity;
             if (player.isHandActive() && player.getActiveItemStack().getItem() == Items.SHIELD) return false;
         }
+        return !MinecraftForge.EVENT_BUS.post(new CanWitherStormTargetMobEvent(storm, entity));
+    }
+
+    /** 选目标时对共享候选做的头部相关过滤（视线、其他头占用、背后、他光束）。 */
+    private boolean isTargetApplicableForHead(int index, EntityLivingBase entity) {
+        if (!storm.canSeeWithCache(index, entity)) return false;
+        if (storm.getPhase() > 3 && (isTargetedByAnotherHead(entity, index)
+                || storm.isInsideOtherTractorBeam(entity, index)
+                || storm.isEntityBehindBack(entity))) {
+            return false;
+        }
         return true;
     }
 
     private void updateLook(int index, HeadState head) {
+        if (storm.getHealth() <= 0.0F) {
+            // 上游在空中死亡时每刻重置 64 步俯首插值；落地后继续消耗剩余步数。
+            if (!storm.onGround) head.deathPitchSteps = 64;
+            if (head.deathPitchSteps > 0) {
+                head.pitch += MathHelper.wrapDegrees(-50.0F - head.pitch) / head.deathPitchSteps;
+                head.deathPitchSteps--;
+            }
+            return;
+        }
+        head.deathPitchSteps = 0;
+        if (storm.isPlayDeadAiDisabled()) {
+            tickHeadLerp(head);
+            return;
+        }
+        head.lerpPitchSteps = 0;
+        head.lerpYawSteps = 0;
+        PowerfulExplosiveEntity.FormidibombEntity formidibomb = index == 0
+                && storm.isAttractingFormidibomb() ? storm.getFormidibomb() : null;
+        if (formidibomb != null && !formidibomb.isDead) {
+            lookAtPosition(index, head, new Vec3d(formidibomb.posX,
+                    formidibomb.posY + formidibomb.getEyeHeight(), formidibomb.posZ), 30.0F, 1);
+            return;
+        }
+        if (head.explicitLookPosition != null) {
+            lookAtPosition(index, head, head.explicitLookPosition, 10.0F,
+                    head.explicitLookSteps);
+            return;
+        }
+        if (head.isDistracted() && head.distractionPosition != null) {
+            lookAtPosition(index, head, head.distractionPosition, 10.0F, 10);
+            return;
+        }
         EntityLivingBase target = head.target;
-        if (target == null && !storm.world.isRemote) target = selectTarget(index);
         if (target == null && storm.world.isRemote) {
             int id = storm.getWatchedTargetId(index);
             Entity entity = id > 0 ? storm.world.getEntityByID(id) : null;
             if (entity instanceof EntityLivingBase) target = (EntityLivingBase) entity;
         }
         if (target != null) {
-            double dx = target.posX - head.position.x;
-            double dy = target.posY + target.getEyeHeight() - head.position.y;
-            double dz = target.posZ - head.position.z;
-            double horizontal = Math.sqrt(dx * dx + dz * dz);
-            float wantedYaw = (float) (MathHelper.atan2(dz, dx) * 180.0D / Math.PI) - 90.0F;
-            float wantedPitch = (float) (-(MathHelper.atan2(dy, horizontal) * 180.0D / Math.PI));
-            head.yaw = rotlerp(head.yaw, wantedYaw, 10.0F);
-            head.pitch = rotlerp(head.pitch, wantedPitch, 20.0F);
+            lookAtPosition(index, head, new Vec3d(target.posX,
+                    target.posY + target.getEyeHeight(), target.posZ), 10.0F,
+                    storm.getPhase() > 3 ? 50 : 3);
         } else {
-            head.yaw = rotlerp(head.yaw, storm.renderYawOffset, 10.0F);
-            head.pitch = rotlerp(head.pitch, 0.0F, 10.0F);
+            lookAtPosition(index, head, getRandomLookPosition(head), 10.0F,
+                    storm.getPhase() >= 4 && head.injuryTicks <= 0 ? 50 : 3);
         }
+    }
+
+    private void lookAtPosition(int index, HeadState head, Vec3d position,
+                                float mainHeadMaximumRotation, int additionalHeadSteps) {
+        double dx = position.x - head.position.x;
+        double dy = position.y - head.position.y;
+        double dz = position.z - head.position.z;
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
+        float wantedYaw = (float) (MathHelper.atan2(dz, dx) * 180.0D / Math.PI) - 90.0F;
+        float wantedPitch = (float) (-(MathHelper.atan2(dy, horizontal) * 180.0D / Math.PI));
+        if (index == 0) {
+            head.yaw = rotlerp(head.yaw, wantedYaw, mainHeadMaximumRotation);
+            head.pitch = rotlerp(head.pitch, wantedPitch, mainHeadMaximumRotation);
+            return;
+        }
+        int steps = Math.max(1, additionalHeadSteps);
+        head.yaw += MathHelper.wrapDegrees(wantedYaw - head.yaw) / steps;
+        head.pitch += MathHelper.wrapDegrees(wantedPitch - head.pitch) / steps;
+    }
+
+    /**
+     * Late-phase look goals only accept positions in the same +/-80 degree
+     * forward arc. Keep stale/synced look targets inside that upstream arc as
+     * well so no head can rotate through the mass while changing targets.
+     */
+    private void constrainLateHeadYaw(HeadState head) {
+        if (storm.getPhase() <= 3 || storm.isDeadOrPlayingDead()) return;
+        float relativeYaw = MathHelper.wrapDegrees(head.yaw - storm.renderYawOffset);
+        head.yaw = storm.renderYawOffset + MathHelper.clamp(relativeYaw,
+                -MAXIMUM_LATE_HEAD_YAW, MAXIMUM_LATE_HEAD_YAW);
+    }
+
+    private Vec3d getRandomLookPosition(HeadState head) {
+        if (!head.randomLookInitialized || head.randomLookTicks < 0) {
+            float pitch = MathHelper.clamp(-storm.getRNG().nextInt(180), -140, -30)
+                    * 0.017453292F;
+            float yaw = (MathHelper.wrapDegrees(storm.renderYawOffset) + 90.0F
+                    + MathHelper.clamp(storm.getRNG().nextInt(360) - 180, -80, 80))
+                    * 0.017453292F;
+            head.randomLookX = Math.cos(yaw) * 30.0D;
+            head.randomLookY = Math.sin(pitch) * 30.0D;
+            head.randomLookZ = Math.sin(yaw) * 30.0D;
+            head.randomLookTicks = (storm.getPhase() < 4 || head.injuryTicks > 0 ? 20 : 120)
+                    + storm.getRNG().nextInt(20);
+            head.randomLookInitialized = true;
+        }
+        --head.randomLookTicks;
+        return head.position.add(head.randomLookX, head.randomLookY, head.randomLookZ);
+    }
+
+    private void tickHeadLerp(HeadState head) {
+        if (head.lerpPitchSteps > 0) {
+            head.pitch += MathHelper.wrapDegrees(head.lerpPitchTarget - head.pitch) / head.lerpPitchSteps;
+            --head.lerpPitchSteps;
+        }
+        if (head.lerpYawSteps > 0) {
+            head.yaw += MathHelper.wrapDegrees(head.lerpYawTarget - head.yaw) / head.lerpYawSteps;
+            --head.lerpYawSteps;
+        }
+    }
+
+    private void lerpHeadTo(HeadState head, float pitch, float yaw, int steps) {
+        head.lerpPitchTarget = pitch;
+        head.lerpYawTarget = yaw;
+        head.lerpPitchSteps = Math.max(0, steps);
+        head.lerpYawSteps = Math.max(0, steps);
     }
 
     private Vec3d getLookVector(HeadState head) {
@@ -267,6 +671,14 @@ public final class WitherStormHeadManager {
         return getLookVector(heads[head(index)]);
     }
 
+    public Vec3d getLookVector(int index, float partialTicks) {
+        float pitch = getPitch(index, partialTicks) * 0.017453292F;
+        float yaw = getYaw(index, partialTicks) * 0.017453292F;
+        float horizontal = MathHelper.cos(pitch);
+        return new Vec3d(-MathHelper.sin(yaw) * horizontal,
+                -MathHelper.sin(pitch), MathHelper.cos(yaw) * horizontal).normalize();
+    }
+
     public double getTractorBeamCutoff(int index) {
         return heads[head(index)].beamCutoff;
     }
@@ -274,9 +686,13 @@ public final class WitherStormHeadManager {
     public void onPhaseChanged(int phase) {
         for (HeadState head : heads) {
             head.requiredHits = phase > 3 ? 3 + storm.getRNG().nextInt(3) : 1 + storm.getRNG().nextInt(2);
-            head.hits = 0;
-            head.nextAttack = 0;
-            head.nextClusterPickup = 0;
+        }
+    }
+
+    public void onOtherHeadsEnabled() {
+        for (int index = 1; index < heads.length; index++) {
+            heads[index].nextRoar = storm.getRNG().nextInt(30) + 1;
+            heads[index].roarScheduleInitialized = true;
         }
     }
 
@@ -288,6 +704,40 @@ public final class WitherStormHeadManager {
         storm.setHeadFlag(biteBit(index), true);
     }
 
+    public void startRoar(int index) {
+        startRoar(index, false);
+    }
+
+    private void startRoar(int index, boolean screaming) {
+        index = head(index);
+        storm.setHeadFlag(roarBit(index), true);
+        if (screaming) storm.playHeadHurtSound(index);
+        else storm.playHeadRoarSound(index);
+    }
+
+    public boolean isDistracted(int index) { return heads[head(index)].isDistracted(); }
+    @Nullable public Vec3d getDistractedPos(int index) { return heads[head(index)].distractionPosition; }
+    public void setDistractedPos(int index, @Nullable Vec3d position) {
+        HeadState head = heads[head(index)];
+        head.distractionPosition = position;
+        if (position == null) clearDistraction(head(index), head);
+        else storm.setHeadDistractionFlag(index, true);
+    }
+    public void makeDistracted(int index, Vec3d position, int ticks) {
+        HeadState head = heads[head(index)];
+        head.distractionEntity = null;
+        head.distractionPosition = position;
+        head.distractionTicks = Math.max(1, ticks);
+        head.distractionUnseenTicks = 0;
+        storm.setHeadDistractionFlag(index, true);
+    }
+
+    public void setLookAt(int index, @Nullable Vec3d position, int steps) {
+        HeadState head = heads[head(index)];
+        head.explicitLookPosition = position;
+        head.explicitLookSteps = Math.max(1, steps);
+    }
+
     public void onHurt() {
         heads[1].idleAttacks += 3;
         heads[2].idleAttacks += 3;
@@ -295,21 +745,39 @@ public final class WitherStormHeadManager {
 
     public void delayAfterChomp(int index) {
         HeadState state = heads[head(index)];
-        state.nextAttack = storm.getRNG().nextInt(20) + storm.getRNG().nextInt(60);
+        state.nextHeadUpdate = storm.ticksExisted + storm.getRNG().nextInt(20)
+                + storm.getRNG().nextInt(60);
     }
 
     public void onStartFalling() {
         for (int index = 0; index < heads.length; index++) {
-            storm.setHeadFlag(roarBit(index), true);
-            heads[index].roarTicks = 0;
-            storm.playHeadRoarSound(index);
+            lerpHeadTo(heads[index], -50.0F, storm.renderYawOffset, 64);
+            startRoar(index, storm.getRNG().nextBoolean());
+        }
+    }
+
+    public void onStartPlayingDead() {
+        for (HeadState head : heads) lerpHeadTo(head, 40.0F, storm.renderYawOffset, 16);
+    }
+
+    public void restorePlayDeadPose(WitherStormEntity.PlayDeadState state) {
+        if (state == WitherStormEntity.PlayDeadState.FALLING) {
+            for (HeadState head : heads) lerpHeadTo(head, -50.0F, storm.renderYawOffset, 64);
+        } else if (state == WitherStormEntity.PlayDeadState.PLAYING_DEAD) {
+            onStartPlayingDead();
+        }
+    }
+
+    public void onAiRestored() {
+        for (int index = 0; index < heads.length; index++) {
+            startRoar(index, storm.getRNG().nextBoolean());
         }
     }
 
     public void onDeath() {
         for (int index = 0; index < heads.length; index++) {
             storm.setHeadFlag(roarBit(index), true);
-            storm.setHeadFlag(biteBit(index), false);
+            storm.playHeadRoarSound(index);
         }
     }
 
@@ -333,11 +801,13 @@ public final class WitherStormHeadManager {
 
     private boolean countAttack(int index, @Nullable Entity attacker) {
         HeadState state = heads[index];
+        ModNetwork.notifyHeadAttacked(storm, index);
         state.hits++;
         storm.setHeadFlag(shakeBit(index), true);
         if (state.hits < requiredHits(index)) {
             storm.setHeadFlag(roarBit(index), true);
             state.roarTicks = 20;
+            storm.playHeadHurtSound(index);
             return false;
         }
         hurt(index, attacker);
@@ -367,12 +837,18 @@ public final class WitherStormHeadManager {
         storm.playHeadHurtSound(index);
         if (attackerWasTarget) {
             EntityPlayerMP player = (EntityPlayerMP) attacker;
-            storm.getUltimateTargetManager().ignoreTarget(player,
+            SymbiontSummoningManager.makeInvulnerable(player,
                     UltimateTargetManager.getHeadEscapeTicks(
                             WitherStormConfig.headEscapeTime, storm.getRNG().nextInt(80)));
             ModCriteriaTriggers.ESCAPE_WITHER_STORM.trigger(
                     player, storm);
         }
+    }
+
+    /** 命令方块受击会绕过常规累计命中与冷却，直接使指定头部受伤。 */
+    public void hurtDirectly(int index, @Nullable Entity attacker) {
+        if (storm.world.isRemote || storm.isDead) return;
+        hurt(head(index), attacker);
     }
 
     private boolean isTargetedByAnyHead(EntityLivingBase target) {
@@ -394,15 +870,26 @@ public final class WitherStormHeadManager {
         return storm.isHeadInjuryFlagSet(index) || heads[index].injuryTicks > 0;
     }
     public int getHeadInjuryTicks(int index) { return heads[head(index)].injuryTicks; }
+    public int getHeadHurtDuration(int index) { return heads[head(index)].hurtOverlayTicks; }
+
+    public void handleHeadAttackedOnClient(int index) {
+        if (!storm.world.isRemote) return;
+        heads[head(index)].hurtOverlayTicks = 10;
+    }
     public EntityLivingBase getTarget(int index) { return heads[head(index)].target; }
     public void setTarget(int index, @Nullable EntityLivingBase target) {
-        heads[head(index)].target = target;
-        storm.updateWatchedTargetId(head(index), target == null ? 0 : target.getEntityId());
+        index = head(index);
+        HeadState state = heads[index];
+        state.target = target;
+        state.targetUnseenTicks = 0;
+        state.lastTargetPosition = null;
+        if (index == 0) storm.setAttackTarget(target);
+        storm.updateWatchedTargetId(index, target == null ? 0 : target.getEntityId());
     }
 
     public float getYaw(int index, float partial) {
         HeadState state = heads[head(index)];
-        return lerp(state.yawO, state.yaw, partial);
+        return state.yawO + MathHelper.wrapDegrees(state.yaw - state.yawO) * partial;
     }
 
     public float getPitch(int index, float partial) {
@@ -418,7 +905,11 @@ public final class WitherStormHeadManager {
     }
 
     public AxisAlignedBB getBounds(int index) {
-        Vec3d position = heads[head(index)].position;
+        return getBounds(index, 1.0F);
+    }
+
+    public AxisAlignedBB getBounds(int index, float partialTicks) {
+        Vec3d position = getPosition(index, partialTicks);
         double size = storm.getPhase() > 3 ? 3.0D : 0.5D;
         return new AxisAlignedBB(position.x - size, position.y - size, position.z - size,
                 position.x + size, position.y + size, position.z + size);
@@ -429,10 +920,9 @@ public final class WitherStormHeadManager {
         return lerp(state.mouthO, state.mouth, partial);
     }
 
-    public float getBrokenRoll(int index, float partial) {
+    public float getBrokenAnimation(int index, float partial) {
         HeadState state = heads[head(index)];
-        float value = MathHelper.sin(lerp(state.brokenO, state.broken, partial) * 0.3F) * 10.0F - 10.0F;
-        return value * (jawMirror[head(index)] ? -1.0F : 1.0F);
+        return lerp(state.brokenO, state.broken, partial);
     }
 
     public float getShakeRoll(int index, float partial) {
@@ -460,42 +950,84 @@ public final class WitherStormHeadManager {
     }
 
     public void writeToNBT(NBTTagCompound tag) {
+        NBTTagCompound headsTag = new NBTTagCompound();
         for (int index = 0; index < heads.length; index++) {
             HeadState state = heads[index];
             NBTTagCompound head = new NBTTagCompound();
-            head.setInteger("RoarTicks", state.roarTicks);
-            head.setInteger("BiteTicks", state.biteTicks);
-            head.setInteger("NextRoarTick", state.nextRoar);
-            head.setInteger("NextAttackTick", state.nextAttack);
-            head.setInteger("NextClusterPickupDelay", state.nextClusterPickup);
-            head.setInteger("IdleAttacks", state.idleAttacks);
-            head.setInteger("InjuryTicks", state.injuryTicks);
-            head.setInteger("InjuryCooldown", state.injuryCooldown);
-            head.setInteger("HeadHits", state.hits);
-            head.setInteger("RequiredHits", state.requiredHits);
-            tag.setTag("WitherStormInternalHead" + index, head);
+            head.setBoolean("IsRoaring", storm.isHeadFlagSet(roarBit(index)));
+            head.setInteger("RoaringTime", state.roarTicks);
+            if (state.distractionPosition != null) {
+                head.setTag("DistractedPos", writeVector(state.distractionPosition));
+            }
+            head.setInteger("DistractedTime", state.distractionTicks);
+            head.setInteger("AttackCooldown", state.injuryCooldown);
+            head.setInteger("InjuryTime", state.injuryTicks);
+            head.setInteger("Hits", state.hits);
+            headsTag.setTag(String.valueOf(index), head);
         }
+        tag.setTag("Heads", headsTag);
     }
 
     public void readFromNBT(NBTTagCompound tag) {
+        NBTTagCompound headsTag = tag.hasKey("Heads", 10) ? tag.getCompoundTag("Heads") : null;
         for (int index = 0; index < heads.length; index++) {
-            String key = "WitherStormInternalHead" + index;
-            if (!tag.hasKey(key, 10)) continue;
-            NBTTagCompound head = tag.getCompoundTag(key);
             HeadState state = heads[index];
-            state.roarTicks = Math.max(0, head.getInteger("RoarTicks"));
-            state.biteTicks = Math.max(0, head.getInteger("BiteTicks"));
-            state.nextRoar = Math.max(0, head.getInteger("NextRoarTick"));
-            state.nextAttack = Math.max(0, head.getInteger("NextAttackTick"));
-            state.nextClusterPickup = head.hasKey("NextClusterPickupDelay", 3)
-                    ? Math.max(0, head.getInteger("NextClusterPickupDelay")) : 0;
-            state.idleAttacks = Math.max(0, head.getInteger("IdleAttacks"));
-            state.injuryTicks = Math.max(0, head.getInteger("InjuryTicks"));
-            state.injuryCooldown = Math.max(0, head.getInteger("InjuryCooldown"));
-            state.hits = Math.max(0, head.getInteger("HeadHits"));
-            state.requiredHits = Math.max(0, head.getInteger("RequiredHits"));
+            NBTTagCompound head = headsTag != null && headsTag.hasKey(String.valueOf(index), 10)
+                    ? headsTag.getCompoundTag(String.valueOf(index)) : null;
+            if (head != null) {
+                storm.setHeadFlag(roarBit(index), head.getBoolean("IsRoaring"));
+                state.roarTicks = Math.max(0, head.getInteger("RoaringTime"));
+                state.distractionPosition = head.hasKey("DistractedPos", 10)
+                        ? readVector(head.getCompoundTag("DistractedPos")) : null;
+                state.distractionTicks = Math.max(0, head.getInteger("DistractedTime"));
+                state.injuryCooldown = Math.max(0, head.getInteger("AttackCooldown"));
+                state.injuryTicks = Math.max(0, head.getInteger("InjuryTime"));
+                state.hits = Math.max(0, head.getInteger("Hits"));
+                state.roarScheduleInitialized = false;
+                state.distractionEntity = null;
+            } else {
+                String previousKey = "WitherStormInternalHead" + index;
+                if (!tag.hasKey(previousKey, 10)) continue;
+                head = tag.getCompoundTag(previousKey);
+                state.roarTicks = Math.max(0, head.getInteger("RoarTicks"));
+                state.biteTicks = Math.max(0, head.getInteger("BiteTicks"));
+                state.nextRoar = Math.max(0, head.getInteger("NextRoarTick"));
+                state.roarScheduleInitialized = head.hasKey("NextRoarTick", 3);
+                state.nextHeadUpdate = head.hasKey("NextHeadUpdate", 3)
+                        ? Math.max(0, head.getInteger("NextHeadUpdate"))
+                        : Math.max(0, head.getInteger("NextAttackTick"));
+                state.nextClusterPickup = head.hasKey("NextClusterPickupDelay", 3)
+                        ? storm.ticksExisted + Math.max(0, head.getInteger("NextClusterPickupDelay")) : 0;
+                state.idleAttacks = Math.max(0, head.getInteger("IdleAttacks"));
+                state.injuryTicks = Math.max(0, head.getInteger("InjuryTicks"));
+                state.injuryCooldown = Math.max(0, head.getInteger("InjuryCooldown"));
+                state.hits = Math.max(0, head.getInteger("HeadHits"));
+                state.requiredHits = Math.max(1, head.getInteger("RequiredHits"));
+                state.distractionTicks = Math.max(0, head.getInteger("DistractionTicks"));
+                state.distractionUnseenTicks = Math.max(0, head.getInteger("DistractionUnseenTicks"));
+                state.nextDistractionCheck = Math.max(0, head.getInteger("NextDistractionCheck"));
+                if (head.hasKey("DistractionX") && head.hasKey("DistractionY") && head.hasKey("DistractionZ")) {
+                    state.distractionPosition = new Vec3d(head.getDouble("DistractionX"),
+                            head.getDouble("DistractionY"), head.getDouble("DistractionZ"));
+                }
+                state.distractionEntity = head.hasUniqueId("DistractionEntity")
+                        ? head.getUniqueId("DistractionEntity") : null;
+            }
             storm.setHeadInjuryFlag(index, state.injuryTicks > 0);
+            storm.setHeadDistractionFlag(index, state.isDistracted());
         }
+    }
+
+    private static NBTTagCompound writeVector(Vec3d vector) {
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setDouble("X", vector.x);
+        tag.setDouble("Y", vector.y);
+        tag.setDouble("Z", vector.z);
+        return tag;
+    }
+
+    private static Vec3d readVector(NBTTagCompound tag) {
+        return new Vec3d(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z"));
     }
 
     private static int roarBit(int index) { return 1 << head(index); }
@@ -514,6 +1046,8 @@ public final class WitherStormHeadManager {
         Vec3d position = Vec3d.ZERO;
         Vec3d positionO = Vec3d.ZERO;
         EntityLivingBase target;
+        int targetUnseenTicks;
+        Vec3d lastTargetPosition;
         float yaw;
         float yawO;
         float pitch;
@@ -527,13 +1061,41 @@ public final class WitherStormHeadManager {
         int roarTicks;
         int biteTicks;
         int nextRoar;
-        int nextAttack;
+        boolean roarScheduleInitialized;
+        int nextHeadUpdate;
         int nextClusterPickup;
         int idleAttacks;
         int injuryTicks;
         int injuryCooldown;
+        int hurtOverlayTicks;
         int hits;
         int requiredHits;
+        int nextShake;
         double beamCutoff = -1.0D;
+        Vec3d distractionPosition;
+        java.util.UUID distractionEntity;
+        int distractionTicks;
+        int distractionUnseenTicks;
+        int nextDistractionCheck;
+        int deathPitchSteps;
+        float lerpPitchTarget;
+        float lerpYawTarget;
+        int lerpPitchSteps;
+        int lerpYawSteps;
+        boolean randomLookInitialized;
+        int randomLookTicks;
+        double randomLookX;
+        double randomLookY;
+        double randomLookZ;
+        Vec3d explicitLookPosition;
+        int explicitLookSteps = 3;
+
+        boolean isDistracted() { return distractionTicks > 0 && distractionPosition != null; }
+        void clearDistraction() {
+            distractionTicks = 0;
+            distractionPosition = null;
+            distractionEntity = null;
+            distractionUnseenTicks = 0;
+        }
     }
 }

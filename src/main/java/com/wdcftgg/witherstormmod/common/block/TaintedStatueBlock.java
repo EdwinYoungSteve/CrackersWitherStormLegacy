@@ -1,6 +1,10 @@
 package com.wdcftgg.witherstormmod.common.block;
 
+import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
+import com.wdcftgg.witherstormmod.common.init.ModItems;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.NonNullList;
 import net.minecraft.block.BlockHorizontal;
 import net.minecraft.block.SoundType;
 import net.minecraft.block.material.Material;
@@ -20,6 +24,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
+import java.util.Random;
 
 public final class TaintedStatueBlock extends BlockHorizontal {
 
@@ -91,6 +96,29 @@ public final class TaintedStatueBlock extends BlockHorizontal {
     public BlockFaceShape getBlockFaceShape(IBlockAccess world, IBlockState state, BlockPos position,
                                             EnumFacing face) {
         return BlockFaceShape.UNDEFINED;
+    }
+
+    @Override
+    public void getDrops(NonNullList<ItemStack> drops, IBlockAccess world, BlockPos position,
+                         IBlockState state, int fortune) {
+        // 上游雕像/骨堆掉落的是凋零腐肉、凋零骨与凋零粉，而不是方块自身。
+        String name = getRegistryName() == null ? "" : getRegistryName().getPath();
+        boolean zombie = "tainted_zombie_sitting".equals(name)
+                || "tainted_zombie_wall".equals(name) || "tainted_zombie_lying".equals(name);
+        Random random = world instanceof World ? ((World) world).rand : new Random();
+        for (int roll = 0; roll < 2; roll++) {
+            if (zombie) {
+                if (random.nextBoolean()) {
+                    drops.add(new ItemStack(ModItems.get("withered_flesh"), 1 + random.nextInt(2)));
+                } else {
+                    drops.add(new ItemStack(ModItems.get("withered_bone")));
+                }
+            } else if (random.nextBoolean()) {
+                drops.add(new ItemStack(ModBlocks.get("tainted_dust")));
+            } else {
+                drops.add(new ItemStack(ModItems.get("withered_bone"), 1 + random.nextInt(2)));
+            }
+        }
     }
 
     @Override

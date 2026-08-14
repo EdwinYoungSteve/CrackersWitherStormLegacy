@@ -1,6 +1,7 @@
 package com.wdcftgg.witherstormmod.client.model;
 
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
+import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelBiped;
 import net.minecraft.client.model.ModelRenderer;
@@ -18,7 +19,6 @@ public class WitheredSymbiontModel extends ModelBiped {
         super(0.0F, 0.0F, 96, 96);
 
         bipedLeftLeg = new ModelRenderer(this, 16, 48);
-        bipedLeftLeg.mirror = true;
         bipedLeftLeg.addBox(-2.0F, 0.0F, -2.0F, 4, 12, 4, 0.0F);
         bipedLeftLeg.setRotationPoint(1.9F, 12.0F, 0.0F);
         bipedHeadwear.showModel = false;
@@ -66,15 +66,17 @@ public class WitheredSymbiontModel extends ModelBiped {
 
         int[][] textureOffsets = {{54, 30}, {72, 33}, {68, 19}, {58, 0}};
         float[] boxOffsets = {-1.5F, -1.3F, -0.9F, -0.5F};
-        int[] widths = {3, 3, 2, 1};
+        float[] widths = {3.0F, 2.6F, 1.8F, 1.0F};
         int[] lengths = {8, 9, 11, 16};
         float[] pivots = {0.0F, 9.0F, 9.0F, 11.0F};
         ModelRenderer parent = base;
         for (int segment = 0; segment < 4; segment++) {
             ModelRenderer part = new ModelRenderer(this,
                     textureOffsets[segment][0], textureOffsets[segment][1]);
-            part.addBox(boxOffsets[segment], boxOffsets[segment], segment == 0 ? 1.0F : 0.0F,
-                    widths[segment], widths[segment], lengths[segment], 0.0F);
+            ModelBuilders.addBox(part, textureOffsets[segment][0], textureOffsets[segment][1],
+                    boxOffsets[segment], boxOffsets[segment], segment == 0 ? 1.0F : 0.0F,
+                    widths[segment], widths[segment], lengths[segment],
+                    0.0F, 1.0F, 1.0F, false);
             if (segment > 0) part.setRotationPoint(0.0F, 0.0F, pivots[segment]);
             parent.addChild(part);
             tentacles[index][segment] = part;
@@ -119,6 +121,7 @@ public class WitheredSymbiontModel extends ModelBiped {
         if (!(entity instanceof SickenedEntities.WitheredSymbiontEntity)) return;
 
         SickenedEntities.WitheredSymbiontEntity symbiont = (SickenedEntities.WitheredSymbiontEntity) entity;
+        float tick = symbiont.isVulnerable() ? 0.0F : ageInTicks;
         float attackSwing = MathHelper.sin(swingProgress * (float) Math.PI);
         float easedAttackSwing = MathHelper.sin(
                 (1.0F - (1.0F - swingProgress) * (1.0F - swingProgress)) * (float) Math.PI);
@@ -130,15 +133,15 @@ public class WitheredSymbiontModel extends ModelBiped {
                 (symbiont.getAttackTarget() != null ? 1.5F : 2.25F);
         bipedRightArm.rotateAngleX = restingArmAngle + attackSwing * 1.2F - easedAttackSwing * 0.4F;
         bipedLeftArm.rotateAngleX = restingArmAngle + attackSwing * 1.2F - easedAttackSwing * 0.4F;
-        bobArms(ageInTicks);
+        bobArms(tick);
 
         bipedBody.rotateAngleX += crouchAnimation;
         bipedRightArm.rotateAngleX += crouchAnimation;
         bipedLeftArm.rotateAngleX += crouchAnimation;
-        bipedRightLeg.rotationPointY += crouchAnimation * 10.5F;
-        bipedLeftLeg.rotationPointY += crouchAnimation * 10.5F;
-        bipedRightLeg.rotationPointZ += crouchAnimation * 0.4F;
-        bipedLeftLeg.rotationPointZ += crouchAnimation * 0.4F;
+        bipedRightLeg.rotationPointZ += crouchAnimation * 10.5F;
+        bipedLeftLeg.rotationPointZ += crouchAnimation * 10.5F;
+        bipedRightLeg.rotationPointY += crouchAnimation * 0.4F;
+        bipedLeftLeg.rotationPointY += crouchAnimation * 0.4F;
         bipedHead.rotationPointY += crouchAnimation * 2.0F;
         bipedBody.rotationPointY += crouchAnimation * 3.0F;
         bipedLeftArm.rotationPointY += crouchAnimation * 3.0F;

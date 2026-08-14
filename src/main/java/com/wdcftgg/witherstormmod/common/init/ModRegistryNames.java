@@ -34,7 +34,8 @@ public final class ModRegistryNames {
             "tainted_cut_sandstone", "tainted_cut_sandstone_slab", "tainted_chiseled_sandstone",
             "tainted_smooth_sandstone", "tainted_smooth_sandstone_slab", "tainted_smooth_sandstone_stairs",
             "tainted_smooth_sandstone_wall", "tainted_glass", "tainted_glass_pane", "tainted_planks",
-            "tainted_torch", "tainted_wall_torch", "tainted_sign", "tainted_wall_sign", "stripped_tainted_log",
+            "tainted_torch", "tainted_wall_torch", "tainted_sign", "tainted_wall_sign", "tainted_hanging_sign",
+            "tainted_wall_hanging_sign", "stripped_tainted_log",
             "stripped_tainted_wood", "tainted_log", "tainted_wood", "tainted_leaves", "tainted_door",
             "tainted_trapdoor", "tainted_button", "tainted_pressure_plate", "tainted_stairs", "tainted_slab",
             "tainted_fence", "tainted_fence_gate", "tainted_mushroom", "potted_tainted_mushroom",
@@ -43,7 +44,8 @@ public final class ModRegistryNames {
     };
 
     private static final String[] ITEMLESS_BLOCKS = {
-            "potted_tainted_mushroom", "tainted_wall_sign", "tainted_wall_torch"
+            "potted_tainted_mushroom", "tainted_wall_sign", "tainted_wall_torch", "tainted_hanging_sign",
+            "tainted_wall_hanging_sign"
     };
 
     private ModRegistryNames() {

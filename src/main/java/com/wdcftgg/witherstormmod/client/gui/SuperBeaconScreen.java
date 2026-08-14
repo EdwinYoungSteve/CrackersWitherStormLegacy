@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 public class SuperBeaconScreen extends GuiContainer {
     private static final ResourceLocation BORDER = new ResourceLocation(
@@ -40,6 +41,7 @@ public class SuperBeaconScreen extends GuiContainer {
     private final SuperBeaconContainer container;
     private final AbstractSuperBeaconTileEntity beacon;
     private final List<EffectButton> effectButtons = new ArrayList<EffectButton>();
+    private final List<Potion> validEffects = new ArrayList<Potion>();
     private Potion candidate;
     private IconButton select;
     private IconButton unselect;
@@ -53,6 +55,7 @@ public class SuperBeaconScreen extends GuiContainer {
         super(container);
         this.container = container;
         this.beacon = beacon;
+        this.validEffects.addAll(beacon.getValidEffects());
         xSize = 230;
         ySize = 157;
     }
@@ -60,14 +63,7 @@ public class SuperBeaconScreen extends GuiContainer {
     @Override
     public void initGui() {
         super.initGui();
-        effectButtons.clear();
-        List<Potion> effects = new ArrayList<Potion>(beacon.getValidEffects());
-        effects.sort(Comparator.comparingInt(Potion::getIdFromPotion));
-        for (int index = 0; index < effects.size(); index++) {
-            EffectButton button = new EffectButton(100 + index, index, effects.get(index));
-            effectButtons.add(button);
-            buttonList.add(button);
-        }
+        rebuildEffectButtons();
 
         int bottomY = guiTop + WINDOW_Y + WINDOW_HEIGHT + 5;
         int centerX = guiLeft + xSize / 2;
@@ -79,6 +75,29 @@ public class SuperBeaconScreen extends GuiContainer {
                 20, 20, TextFormatting.RED + "X"));
         layoutEffectButtons();
         refreshButtons();
+    }
+
+    public void setValidEffects(Set<Potion> effects) {
+        validEffects.clear();
+        validEffects.addAll(effects);
+        validEffects.sort(Comparator.comparingInt(Potion::getIdFromPotion));
+        if (candidate != null && !validEffects.contains(candidate)) candidate = null;
+        if (select != null) {
+            rebuildEffectButtons();
+            layoutEffectButtons();
+            refreshButtons();
+        }
+    }
+
+    private void rebuildEffectButtons() {
+        buttonList.removeAll(effectButtons);
+        effectButtons.clear();
+        validEffects.sort(Comparator.comparingInt(Potion::getIdFromPotion));
+        for (int index = 0; index < validEffects.size(); index++) {
+            EffectButton button = new EffectButton(100 + index, index, validEffects.get(index));
+            effectButtons.add(button);
+            buttonList.add(button);
+        }
     }
 
     @Override
@@ -160,7 +179,8 @@ public class SuperBeaconScreen extends GuiContainer {
         drawCentered(I18n.format("container.witherstormmod.withered_beacon.available_effects"),
                 WINDOW_X + HALF_WIDTH + HALF_WIDTH / 2, WINDOW_Y + 10, 0xFFFFFF);
         String level = I18n.format("container.witherstormmod.withered_beacon.level",
-                container.getLevel() > 0 ? Integer.toString(container.getLevel()) : "");
+                container.getLevel() > 0
+                        ? I18n.format("enchantment.level." + container.getLevel()) : "");
         drawCentered(level, WINDOW_X + HALF_WIDTH / 2, WINDOW_Y + WINDOW_HEIGHT - 11, 0xFFFFFF);
 
         Potion primary = container.getPrimaryEffect();
@@ -172,7 +192,8 @@ public class SuperBeaconScreen extends GuiContainer {
     }
 
     private void drawInfoPage() {
-        String title = I18n.format(beacon.getNameForGui());
+        String title = beacon.hasCustomName()
+                ? beacon.getNameForGui() : I18n.format(beacon.getNameForGui());
         drawCentered(title, xSize / 2, 14, 0xFFFFFF);
         List<String> lines = fontRenderer.listFormattedStringToWidth(
                 I18n.format("withered_beacon.info"), WINDOW_WIDTH - 20);

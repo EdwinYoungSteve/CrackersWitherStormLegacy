@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import com.wdcftgg.witherstormmod.WitherStormMod;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 
 import java.io.IOException;
@@ -26,6 +27,10 @@ public final class UpstreamEntityTags {
 
     public static final String WITHER_STORM_TARGETING_BLACKLIST =
             "witherstormmod:wither_storm_targeting_blacklist";
+    public static final String FAVOURABLE_MOBS = "witherstormmod:favourable_mobs";
+    public static final String HIGH_IMMUNITY = "witherstormmod:high_immunity";
+    public static final String SICKENED_MOBS = "witherstormmod:sickened_mobs";
+    public static final String WITHER_SICKNESS_IMMUNE = "witherstormmod:wither_sickness_immune";
 
     private static volatile Map<String, TagDefinition> definitions = Collections.emptyMap();
     private static volatile boolean initialized;
@@ -59,10 +64,11 @@ public final class UpstreamEntityTags {
             throw new IllegalStateException("Unable to load entity tags from the external Wither Storm archive",
                     exception);
         }
-        if (!loaded.containsKey(WITHER_STORM_TARGETING_BLACKLIST)) {
-            throw new IllegalStateException("Required upstream entity tag is missing: "
-                    + WITHER_STORM_TARGETING_BLACKLIST);
-        }
+        requireTag(loaded, WITHER_STORM_TARGETING_BLACKLIST);
+        requireTag(loaded, FAVOURABLE_MOBS);
+        requireTag(loaded, HIGH_IMMUNITY);
+        requireTag(loaded, SICKENED_MOBS);
+        requireTag(loaded, WITHER_SICKNESS_IMMUNE);
         definitions = Collections.unmodifiableMap(loaded);
         initialized = true;
         WitherStormMod.LOGGER.info("Indexed {} external upstream entity tags", loaded.size());
@@ -70,7 +76,8 @@ public final class UpstreamEntityTags {
 
     public static boolean contains(String tagName, Entity entity) {
         if (entity == null) return false;
-        ResourceLocation id = EntityList.getKey(entity);
+        ResourceLocation id = entity instanceof EntityPlayer
+                ? new ResourceLocation("minecraft", "player") : EntityList.getKey(entity);
         if (id == null) return false;
         ensureInitialized();
         return contains(tagName, id.toString(), new HashSet<String>());
@@ -117,6 +124,12 @@ public final class UpstreamEntityTags {
 
     private static void ensureInitialized() {
         if (!initialized) initialize();
+    }
+
+    private static void requireTag(Map<String, TagDefinition> loaded, String tagName) {
+        if (!loaded.containsKey(tagName)) {
+            throw new IllegalStateException("Required upstream entity tag is missing: " + tagName);
+        }
     }
 
     private static final class TagDefinition {

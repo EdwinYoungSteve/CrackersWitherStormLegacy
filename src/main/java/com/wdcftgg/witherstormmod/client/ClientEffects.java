@@ -37,7 +37,13 @@ public final class ClientEffects {
 
         previousShakeX = shakeX;
         previousShakeY = shakeY;
-        if (shakeDuration > 0.0F) {
+        if (!WitherStormClientConfig.cameraShakeEffects) {
+            shakeX = 0.0F;
+            shakeY = 0.0F;
+            shakeDuration = 0.0F;
+            initialShakeDuration = 0.0F;
+            shakePower = 0.0F;
+        } else if (shakeDuration > 0.0F) {
             float currentPower = minecraft.player.onGround ? shakePower : 0.0F;
             float percentage = shakeDuration / initialShakeDuration;
             shakeX = currentPower * (minecraft.player.getRNG().nextFloat() * 2.0F - 1.0F) * percentage;
@@ -58,6 +64,7 @@ public final class ClientEffects {
     }
 
     public static void shake(float duration, float power) {
+        if (!WitherStormClientConfig.cameraShakeEffects) return;
         initialShakeDuration = duration;
         shakeDuration = duration;
         shakePower = power;

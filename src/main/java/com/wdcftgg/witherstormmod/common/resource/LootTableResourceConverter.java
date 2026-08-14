@@ -98,10 +98,10 @@ public final class LootTableResourceConverter {
         converted.remove("children");
         converted.remove("expand");
         String itemName = string(converted, "name");
-        if ("minecraft:wither_rose".equals(itemName)) converted.addProperty("name", "minecraft:red_flower");
+        if ("minecraft:wither_rose".equals(itemName)) converted.addProperty("name", "futuremc:wither_rose");
         if ("minecraft:phantom_membrane".equals(itemName)) converted.addProperty("name", "minecraft:leather");
-        if ("minecraft:crossbow".equals(itemName)) converted.addProperty("name", "minecraft:bow");
-        if ("minecraft:suspicious_stew".equals(itemName)) converted.addProperty("name", "minecraft:mushroom_stew");
+        if ("minecraft:crossbow".equals(itemName)) converted.addProperty("name", "futuremc:crossbow");
+        if ("minecraft:suspicious_stew".equals(itemName)) converted.addProperty("name", "futuremc:suspicious_stew");
         if ("minecraft:glow_berries".equals(itemName)) converted.addProperty("name", "minecraft:melon");
         if ("minecraft:enchanted_golden_apple".equals(itemName)) {
             converted.addProperty("name", "minecraft:golden_apple");
@@ -171,7 +171,15 @@ public final class LootTableResourceConverter {
 
     private static JsonObject convertFunction(JsonObject source) throws IOException {
         String type = unqualify(string(source, "function"));
-        if ("explosion_decay".equals(type) || "set_stew_effect".equals(type)) return null;
+        if ("explosion_decay".equals(type)) return null;
+        if ("set_stew_effect".equals(type)) {
+            JsonObject converted = copyObject(source);
+            converted.addProperty("function", "witherstormmod:set_stew_effect");
+            if (converted.has("conditions")) {
+                converted.add("conditions", convertConditions(converted.getAsJsonArray("conditions")));
+            }
+            return converted;
+        }
         JsonObject converted = copyObject(source);
         converted.addProperty("function", type);
         converted.remove("add");

@@ -8,6 +8,9 @@ import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.boss.EntityDragon;
+import net.minecraft.entity.boss.EntityWither;
 import net.minecraft.init.Enchantments;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
@@ -16,6 +19,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.world.World;
+import net.minecraft.world.Explosion;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
@@ -87,6 +91,38 @@ public class SimpleBlock extends Block {
             return;
         }
         super.harvestBlock(world, player, pos, state, tileEntity, tool);
+    }
+
+    @Override
+    public boolean canEntityDestroy(IBlockState state, net.minecraft.world.IBlockAccess world,
+                                    BlockPos pos, Entity entity) {
+        return !(isBossImmuneBlock() && isDestructiveBoss(entity))
+                && super.canEntityDestroy(state, world, pos, entity);
+    }
+
+    @Override
+    public boolean canDropFromExplosion(Explosion explosion) {
+        return !hasGuaranteedExplosionDrop() && super.canDropFromExplosion(explosion);
+    }
+
+    @Override
+    public void onBlockExploded(World world, BlockPos pos, Explosion explosion) {
+        if (hasGuaranteedExplosionDrop() && !world.isRemote) {
+            dropBlockAsItem(world, pos, world.getBlockState(pos), 0);
+        }
+        super.onBlockExploded(world, pos, explosion);
+    }
+
+    public static boolean isDestructiveBoss(Entity entity) {
+        return entity instanceof EntityWither || entity instanceof EntityDragon;
+    }
+
+    private boolean isBossImmuneBlock() {
+        return getRegistryName() != null && "hardened_flesh_block".equals(getRegistryName().getPath());
+    }
+
+    private boolean hasGuaranteedExplosionDrop() {
+        return getRegistryName() != null && "infected_flesh_block".equals(getRegistryName().getPath());
     }
 
     @Override

@@ -1,18 +1,24 @@
 package com.wdcftgg.witherstormmod.common.entity;
 
 import com.wdcftgg.witherstormmod.Tags;
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import com.wdcftgg.witherstormmod.common.init.ModItems;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.item.FormidibombItem;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import com.wdcftgg.witherstormmod.common.world.BowelsDimensions;
 import com.wdcftgg.witherstormmod.common.world.BowelsInstanceData;
+import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundCategory;
@@ -21,11 +27,13 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.WorldEntitySpawner;
+import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.event.ForgeEventFactory;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,13 +42,12 @@ import java.util.UUID;
  * 召唤冷却、玩家保护和最近一次召唤记录都写入实体 NBT，避免区块重载后重复召唤。
  */
 public final class SymbiontSummoningManager {
-    private static final int MINIMUM_CHECK_INTERVAL_TICKS = 60 * 20;
-    private static final int SUMMONING_DELAY_MINUTES = 10;
-    private static final int PLAYER_PROTECTION_MINUTES = 5;
     private static final String PLAYER_DATA_KEY = "WitherStormLegacySymbiont";
-    private static final String LAST_SUMMONED_STORM = "LastSummonedStorm";
-    private static final String LAST_SUMMONED_PHASE = "LastSummonedPhase";
-    private static final String KILLED_UNTIL = "KilledUntil";
+    private static final String SUMMONING_DATA = "SummoningData";
+    private static final String SUMMONER = "Summoner";
+    private static final String SUMMONER_PHASE = "SummonerPhase";
+    private static final String SUMMONING_COOLDOWN_UNTIL = "SummoningCooldownUntil";
+    private static final String INVULNERABLE_UNTIL = "InvulnerableUntil";
 
     private final WitherStormEntity storm;
     private int timeTillCanSummonSymbiont;
@@ -52,13 +59,20 @@ public final class SymbiontSummoningManager {
     public void tick() {
         if (storm.world.isRemote || storm.isDead) return;
         if (timeTillCanSummonSymbiont > 0) --timeTillCanSummonSymbiont;
-
-        int interval = MINIMUM_CHECK_INTERVAL_TICKS * (storm.getRNG().nextInt(3) + 1);
-        if (storm.ticksExisted % interval != 0) return;
+        if (!WitherStormConfig.canSummonSymbiont) return;
+        int delay = MathHelper.clamp(WitherStormConfig.minimumSpawnCheckInterval, 1, 240) * 20;
+        // The multiplier is part of the interval, not the modulo result.
+        // Java's precedence makes `ticks % delay * multiplier` test a
+        // different (and much more frequent) schedule than the upstream
+        // `ticks % (delay * multiplier)` expression.
+        int randomizedDelay = delay * (storm.getRNG().nextInt(3) + 1);
+        if (storm.ticksExisted % randomizedDelay != 0) return;
 
         List<EntityPlayer> players = storm.world.getEntitiesWithinAABB(EntityPlayer.class,
                 storm.getSearchBox(), player -> player != null && player.isEntityAlive());
-        Collections.sort(players, Comparator.comparingDouble(storm::getDistanceSq));
+        // 保留上游比较器的 floor(真实距离差) 及稳定排序语义。
+        Collections.sort(players, (first, second) -> MathHelper.floor(
+                first.getDistance(storm) - second.getDistance(storm)));
         for (EntityPlayer player : players) {
             if (!playerApplicable(player)) continue;
             if (canSummonSymbiont()) {
@@ -79,8 +93,9 @@ public final class SymbiontSummoningManager {
         AxisAlignedBB search = storm.getSearchBox().grow(50.0D);
         for (Entity entity : storm.world.getEntitiesWithinAABB(Entity.class, search)) {
             if (entity == storm || entity.isDead) continue;
-            if (entity instanceof PowerfulExplosiveEntity.FormidibombEntity
-                    || entity instanceof SickenedEntities.WitheredSymbiontEntity) return false;
+            if (entity instanceof PowerfulExplosiveEntity.FormidibombEntity) {
+                if (((PowerfulExplosiveEntity.FormidibombEntity) entity).getStartFuse() > 0) return false;
+            } else if (entity instanceof SickenedEntities.WitheredSymbiontEntity) return false;
         }
 
         if (isPlayerInsideBowelsInstance()) return false;
@@ -89,8 +104,10 @@ public final class SymbiontSummoningManager {
 
     protected boolean playerApplicable(EntityPlayer player) {
         if (!player.isEntityAlive() || player.isSpectator() || player.capabilities.disableDamage) return false;
-        if (storm.getDistanceSq(player) > storm.getSearchBox().getAverageEdgeLength()
-                * storm.getSearchBox().getAverageEdgeLength()) return false;
+        double deltaX = player.posX - storm.posX;
+        double deltaZ = player.posZ - storm.posZ;
+        double followRange = storm.getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getAttributeValue();
+        if (deltaX * deltaX + deltaZ * deltaZ > followRange * followRange) return false;
         if (shouldIgnorePlayer(player)) return false;
         if (hasRecentSummon(player, storm)) return false;
 
@@ -115,26 +132,55 @@ public final class SymbiontSummoningManager {
             if (spawnPos == null) continue;
 
             SickenedEntities.WitheredSymbiontEntity symbiont = new SickenedEntities.WitheredSymbiontEntity(storm.world);
-            double y = spawnPos.getY() + 1.0D;
+            IBlockState floorState = storm.world.getBlockState(spawnPos);
+            AxisAlignedBB floorCollision = floorState.getCollisionBoundingBox(storm.world, spawnPos);
+            double y = spawnPos.getY() + (floorCollision == Block.NULL_AABB
+                    ? 1.0D : floorCollision.maxY);
+            BlockPos spawnEntityPos = new BlockPos(spawnPos.getX(), MathHelper.floor(y), spawnPos.getZ());
+            if (!WorldEntitySpawner.canCreatureTypeSpawnAtLocation(
+                    EntityLiving.SpawnPlacementType.ON_GROUND, storm.world, spawnEntityPos)) continue;
             symbiont.setPosition(spawnPos.getX() + 0.5D, y, spawnPos.getZ() + 0.5D);
+            AxisAlignedBB body = symbiont.getEntityBoundingBox();
+            if (!storm.world.checkNoEntityCollision(body, symbiont)
+                    || !storm.world.getCollisionBoxes(symbiont, body).isEmpty()
+                    || storm.world.containsAnyLiquid(body)) continue;
             lookAt(symbiont, player);
             symbiont.setOwner(storm);
             symbiont.setAttackTarget(player);
             if (!storm.world.spawnEntity(symbiont)) continue;
+            if (!ForgeEventFactory.doSpecialSpawn(symbiont, storm.world,
+                    (float) symbiont.posX, (float) symbiont.posY, (float) symbiont.posZ)) {
+                symbiont.onInitialSpawn(storm.world.getDifficultyForLocation(symbiont.getPosition()), null);
+            }
+            symbiont.spawnExplosionParticle();
 
             if (storm.world instanceof WorldServer) {
                 WorldServer world = (WorldServer) storm.world;
-                world.spawnParticle(net.minecraft.util.EnumParticleTypes.PORTAL,
-                        symbiont.posX, symbiont.posY + 1.0D, symbiont.posZ,
-                        20, 0.25D, 0.5D, 0.25D, 0.01D);
-                world.spawnParticle(net.minecraft.util.EnumParticleTypes.SMOKE_LARGE,
-                        symbiont.posX, symbiont.posY + 1.0D, symbiont.posZ,
-                        20, 0.2D, 0.4D, 0.2D, 0.01D);
+                for (EntityPlayer nearby : world.getEntitiesWithinAABB(EntityPlayer.class,
+                        storm.getSearchBox(), candidate -> candidate != null && candidate.isEntityAlive())) {
+                    if (nearby instanceof EntityPlayerMP) {
+                        CriteriaTriggers.SUMMONED_ENTITY.trigger((EntityPlayerMP) nearby, symbiont);
+                    }
+                }
+                double commandSpreadX = storm.getRNG().nextGaussian();
+                double commandSpreadY = storm.getRNG().nextGaussian();
+                double commandSpreadZ = storm.getRNG().nextGaussian();
+                ModNetwork.sendCommandBlockParticles(world, symbiont.getPositionVector(), 20,
+                        commandSpreadX, commandSpreadY, commandSpreadZ, 0.2D,
+                        ModNetwork.COMMAND_BLOCK_PARTICLES_GAUSSIAN);
+                double poofSpreadX = storm.getRNG().nextGaussian();
+                double poofSpreadY = storm.getRNG().nextGaussian();
+                double poofSpreadZ = storm.getRNG().nextGaussian();
+                world.spawnParticle(net.minecraft.util.EnumParticleTypes.EXPLOSION_NORMAL,
+                        symbiont.posX, symbiont.posY, symbiont.posZ, 20,
+                        poofSpreadX, poofSpreadY, poofSpreadZ, 0.01D);
             }
             storm.world.playSound(null, storm.getPosition(), ModSounds.get("command_block_summon"),
                     SoundCategory.HOSTILE, 15.0F, 1.0F);
             symbiont.playSound(ModSounds.get("withered_symbiont_spawn"), 12.0F, 1.0F);
-            timeTillCanSummonSymbiont = SUMMONING_DELAY_MINUTES * 1200 + storm.getRNG().nextInt(12000);
+            timeTillCanSummonSymbiont = MathHelper.clamp(
+                    WitherStormConfig.witherStormSummoningDelay, 1, 20) * 1200
+                    + storm.getRNG().nextInt(12000);
             markSummoned(player, storm);
             return;
         }
@@ -142,27 +188,39 @@ public final class SymbiontSummoningManager {
 
     @Nullable
     private BlockPos findHighestSpawnPos(int x, int z) {
-        if (!storm.world.isBlockLoaded(new BlockPos(x, 0, z))) return null;
-        BlockPos heightPos = storm.world.getHeight(new BlockPos(x, 0, z)).down();
-        int highest = Integer.MIN_VALUE;
+        Integer highest = null;
         BlockPos result = null;
         for (int offsetX = -5; offsetX <= 5; offsetX++) {
             for (int offsetZ = -5; offsetZ <= 5; offsetZ++) {
-                BlockPos candidate = new BlockPos(x + offsetX, heightPos.getY(), z + offsetZ);
-                if (!storm.world.isBlockLoaded(candidate)) continue;
-                int y = storm.world.getHeight(candidate).getY() - 1;
-                if (y <= highest) continue;
-                BlockPos floor = new BlockPos(candidate.getX(), y, candidate.getZ());
-                IBlockState state = storm.world.getBlockState(floor);
-                if (!storm.world.isSideSolid(floor, EnumFacing.UP) || state.getCollisionBoundingBox(storm.world, floor) == Block.NULL_AABB) continue;
-                AxisAlignedBB body = new AxisAlignedBB(floor.getX() + 0.1D, y + 1.0D, floor.getZ() + 0.1D,
-                        floor.getX() + 0.9D, y + 4.8D, floor.getZ() + 0.9D);
-                if (!storm.world.checkNoEntityCollision(body)) continue;
+                int candidateX = x + offsetX;
+                int candidateZ = z + offsetZ;
+                // This local scan already returns the supporting block Y;
+                // convert its collision shape to the entity feet position below.
+                int y = getMotionBlockingNoLeavesHeight(candidateX, candidateZ);
+                if (y < 0) continue;
+                if (highest != null && y <= highest) continue;
                 highest = y;
-                result = floor;
+                result = new BlockPos(candidateX, y, candidateZ);
             }
         }
+        if (result == null) return null;
+        IBlockState state = storm.world.getBlockState(result);
+        if (!storm.world.isSideSolid(result, EnumFacing.UP)
+                || state.getCollisionBoundingBox(storm.world, result) == Block.NULL_AABB) return null;
         return result;
+    }
+
+    private int getMotionBlockingNoLeavesHeight(int x, int z) {
+        BlockPos column = new BlockPos(x, 0, z);
+        int top = Math.min(storm.world.getActualHeight() - 1,
+                storm.world.getHeight(column).getY() - 1);
+        for (int y = top; y >= 0; y--) {
+            BlockPos position = new BlockPos(x, y, z);
+            IBlockState state = storm.world.getBlockState(position);
+            if (state.getBlock().isLeaves(state, storm.world, position)) continue;
+            if (state.getMaterial().blocksMovement() || state.getMaterial().isLiquid()) return y;
+        }
+        return -1;
     }
 
     private static void lookAt(SickenedEntities.WitheredSymbiontEntity symbiont, EntityPlayer player) {
@@ -176,8 +234,9 @@ public final class SymbiontSummoningManager {
     }
 
     private boolean isPlayerInsideBowelsInstance() {
-        if (storm.world.getMinecraftServer() == null) return false;
-        WorldServer bowels = storm.world.getMinecraftServer().getWorld(BowelsDimensions.DIMENSION_ID);
+        // 只读取已加载的肠道世界，绝不能在这里创建维度，否则每次召唤检查都会
+        // 触发“Loading dimension 223 / Unloading dimension 223”的反复加载。
+        WorldServer bowels = DimensionManager.getWorld(BowelsDimensions.DIMENSION_ID);
         if (bowels == null) return false;
         BowelsInstanceData.Instance instance = BowelsInstanceData.get(bowels).get(storm.getUniqueID());
         if (instance == null || instance.completed) return false;
@@ -221,29 +280,85 @@ public final class SymbiontSummoningManager {
     }
 
     public static void markSummoned(EntityPlayer player, WitherStormEntity storm) {
-        NBTTagCompound data = player.getEntityData().getCompoundTag(PLAYER_DATA_KEY);
-        data.setUniqueId(LAST_SUMMONED_STORM, storm.getUniqueID());
-        data.setInteger(LAST_SUMMONED_PHASE, storm.getPhase());
-        player.getEntityData().setTag(PLAYER_DATA_KEY, data);
+        NBTTagCompound data = getPlayerData(player);
+        NBTTagCompound snapshot = getSnapshot(data, storm.getUniqueID(), true);
+        snapshot.setInteger(SUMMONER_PHASE, storm.getPhase());
+        snapshot.setLong(SUMMONING_COOLDOWN_UNTIL, player.world.getTotalWorldTime()
+                + MathHelper.clamp(WitherStormConfig.playerSummoningDelay, 1, 60) * 1200L
+                + player.getRNG().nextInt(2400));
+        savePlayerData(player, data);
     }
 
     public static boolean hasRecentSummon(EntityPlayer player, WitherStormEntity storm) {
-        NBTTagCompound data = player.getEntityData().getCompoundTag(PLAYER_DATA_KEY);
-        return data.hasUniqueId(LAST_SUMMONED_STORM)
-                && storm.getUniqueID().equals(data.getUniqueId(LAST_SUMMONED_STORM))
-                && data.getInteger(LAST_SUMMONED_PHASE) == storm.getPhase();
+        NBTTagCompound snapshot = getSnapshot(getPlayerData(player), storm.getUniqueID(), false);
+        return snapshot != null && snapshot.getInteger(SUMMONER_PHASE) == storm.getPhase()
+                && snapshot.getLong(SUMMONING_COOLDOWN_UNTIL) > player.world.getTotalWorldTime();
     }
 
     public static void markKilledSymbiont(EntityPlayer player, @Nullable WitherStormEntity storm) {
-        NBTTagCompound data = player.getEntityData().getCompoundTag(PLAYER_DATA_KEY);
-        long now = player.world.getTotalWorldTime();
-        data.setLong(KILLED_UNTIL, now + PLAYER_PROTECTION_MINUTES * 1200L + player.getRNG().nextInt(1200));
-        if (storm != null) data.setUniqueId(LAST_SUMMONED_STORM, storm.getUniqueID());
-        player.getEntityData().setTag(PLAYER_DATA_KEY, data);
+        if (storm == null) return;
+        NBTTagCompound data = getPlayerData(player);
+        NBTTagCompound snapshot = getSnapshot(data, storm.getUniqueID(), true);
+        if (!snapshot.hasKey(SUMMONER_PHASE, 3)) snapshot.setInteger(SUMMONER_PHASE, storm.getPhase());
+        snapshot.setLong(SUMMONING_COOLDOWN_UNTIL, player.world.getTotalWorldTime()
+                + MathHelper.clamp(WitherStormConfig.playerSummoningDelayOnKill, 1, 60) * 1200L
+                + player.getRNG().nextInt(24000));
+        savePlayerData(player, data);
+    }
+
+    public static void makeInvulnerable(EntityPlayer player) {
+        makeInvulnerable(player,
+                MathHelper.clamp(WitherStormConfig.playerInvulnerableTime, 1, 10) * 1200
+                        + player.getRNG().nextInt(1200));
+    }
+
+    public static void makeInvulnerable(EntityPlayer player, int ticks) {
+        NBTTagCompound data = getPlayerData(player);
+        data.setLong(INVULNERABLE_UNTIL,
+                player.world.getTotalWorldTime() + Math.max(0, ticks));
+        savePlayerData(player, data);
     }
 
     public static boolean shouldIgnorePlayer(EntityPlayer player) {
-        NBTTagCompound data = player.getEntityData().getCompoundTag(PLAYER_DATA_KEY);
-        return data.getLong(KILLED_UNTIL) > player.world.getTotalWorldTime();
+        return getPlayerData(player).getLong(INVULNERABLE_UNTIL) > player.world.getTotalWorldTime();
+    }
+
+    private static NBTTagCompound getPlayerData(EntityPlayer player) {
+        NBTTagCompound entityData = player.getEntityData();
+        if (!entityData.hasKey(EntityPlayer.PERSISTED_NBT_TAG, 10)) {
+            entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, new NBTTagCompound());
+        }
+        NBTTagCompound persistentData = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
+        if (!persistentData.hasKey(PLAYER_DATA_KEY, 10) && entityData.hasKey(PLAYER_DATA_KEY, 10)) {
+            persistentData.setTag(PLAYER_DATA_KEY, entityData.getCompoundTag(PLAYER_DATA_KEY).copy());
+        }
+        if (!persistentData.hasKey(PLAYER_DATA_KEY, 10)) {
+            persistentData.setTag(PLAYER_DATA_KEY, new NBTTagCompound());
+        }
+        return persistentData.getCompoundTag(PLAYER_DATA_KEY);
+    }
+
+    private static void savePlayerData(EntityPlayer player, NBTTagCompound data) {
+        NBTTagCompound entityData = player.getEntityData();
+        NBTTagCompound persistentData = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
+        persistentData.setTag(PLAYER_DATA_KEY, data);
+        entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, persistentData);
+    }
+
+    @Nullable
+    private static NBTTagCompound getSnapshot(NBTTagCompound data, UUID stormId, boolean create) {
+        NBTTagList snapshots = data.getTagList(SUMMONING_DATA, 10);
+        for (int index = 0; index < snapshots.tagCount(); index++) {
+            NBTTagCompound snapshot = snapshots.getCompoundTagAt(index);
+            if (snapshot.hasUniqueId(SUMMONER) && stormId.equals(snapshot.getUniqueId(SUMMONER))) {
+                return snapshot;
+            }
+        }
+        if (!create) return null;
+        NBTTagCompound snapshot = new NBTTagCompound();
+        snapshot.setUniqueId(SUMMONER, stormId);
+        snapshots.appendTag(snapshot);
+        data.setTag(SUMMONING_DATA, snapshots);
+        return snapshot;
     }
 }

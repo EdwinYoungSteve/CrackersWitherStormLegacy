@@ -160,12 +160,6 @@ public final class TaintedCarvedPumpkinBlock extends BlockHorizontal {
     }
 
     @Override
-    public boolean canPlaceBlockAt(World world, BlockPos position) {
-        return world.getBlockState(position).getBlock().isReplaceable(world, position)
-                && world.isSideSolid(position.down(), EnumFacing.UP);
-    }
-
-    @Override
     public IBlockState getStateForPlacement(World world, BlockPos position, EnumFacing facing, float hitX, float hitY,
                                             float hitZ, int metadata, EntityLivingBase placer) {
         return getDefaultState().withProperty(FACING, placer.getHorizontalFacing().getOpposite());

@@ -58,6 +58,17 @@ public class PhlegmBlockParticle extends Particle {
         }
     }
 
+    public static void spawn(World world, double x, double y, double z,
+                             double motionX, double motionY, double motionZ) {
+        if (world == null || !world.isRemote) return;
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft.effectRenderer == null) return;
+        TextureAtlasSprite sprite = minecraft.getTextureMapBlocks().getAtlasSprite(SPRITE_LOCATION.toString());
+        if (sprite == null || "missingno".equals(sprite.getIconName())) return;
+        minecraft.effectRenderer.addEffect(new PhlegmBlockParticle(
+                world, x, y, z, motionX, motionY, motionZ, sprite));
+    }
+
     static Vec3d sampleOffset(Random random, float radius) {
         return new Vec3d(
                 (random.nextFloat() * 2.0F - 1.0F) * radius,

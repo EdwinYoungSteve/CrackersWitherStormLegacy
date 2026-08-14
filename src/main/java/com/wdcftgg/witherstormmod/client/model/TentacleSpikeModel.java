@@ -33,8 +33,8 @@ public class TentacleSpikeModel extends ModelBase {
                        float netHeadYaw, float headPitch, float scale) {
         float anim = limbSwing;
         float sway = anim * (3.0F - anim) + new Random(entity.getEntityId()).nextFloat() * 1000.0F;
-        float zSway = MathHelper.sin(sway) * 0.1F;
-        float xSway = MathHelper.cos(sway) * 0.1F;
+        float zSway = MathHelper.cos(sway) * 0.1F;
+        float xSway = MathHelper.sin(sway) * 0.1F;
         base.rotateAngleZ = middle.rotateAngleZ = end.rotateAngleZ = zSway;
         base.rotateAngleX = middle.rotateAngleX = end.rotateAngleX = xSway;
         base.render(scale);

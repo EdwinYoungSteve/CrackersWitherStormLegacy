@@ -7,7 +7,11 @@ import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.attributes.AttributeModifier;
+import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
@@ -17,12 +21,32 @@ import net.minecraft.world.World;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.UUID;
+import com.google.common.collect.Multimap;
 
 public class EyeOfTheStormItem extends CommandBlockSwordItem {
     private static final String ENTITY_HEALTH_RATIO = "EntityHealthRatio";
+    private static final UUID DAMAGE_MODIFIER_ID =
+            UUID.fromString("823350e7-4c91-4a1f-8c01-8735113f066e");
 
     public EyeOfTheStormItem(String name) {
         super(name, ModToolMaterials.EYE_OF_THE_STORM);
+    }
+
+    /** 对应上游 ItemAttributeModifierEvent：生命值越低伤害越低。 */
+    @Override
+    public Multimap<String, AttributeModifier> getAttributeModifiers(
+            EntityEquipmentSlot slot, ItemStack stack) {
+        Multimap<String, AttributeModifier> modifiers = super.getAttributeModifiers(slot, stack);
+        if (slot != EntityEquipmentSlot.MAINHAND) return modifiers;
+        NBTTagCompound tag = stack.getSubCompound("WitherStormMod");
+        if (tag == null || !tag.hasKey(ENTITY_HEALTH_RATIO)) return modifiers;
+        float ratio = tag.getFloat(ENTITY_HEALTH_RATIO);
+        if (ratio <= 0.0F) return modifiers;
+        modifiers.put(SharedMonsterAttributes.ATTACK_DAMAGE.getName(),
+                new AttributeModifier(DAMAGE_MODIFIER_ID, "Health damage modifier",
+                        -ratio * 5.0D, 0));
+        return modifiers;
     }
 
     @Override

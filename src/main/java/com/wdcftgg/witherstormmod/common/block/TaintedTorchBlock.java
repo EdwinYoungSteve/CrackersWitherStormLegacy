@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.common.block;
 
+import com.wdcftgg.witherstormmod.WitherStormMod;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
 import net.minecraft.block.BlockTorch;
 import net.minecraft.block.SoundType;
@@ -42,6 +43,6 @@ public class TaintedTorchBlock extends BlockTorch {
             z += 0.27D * opposite.getZOffset();
         }
         world.spawnParticle(EnumParticleTypes.SMOKE_NORMAL, x, y, z, 0.0D, 0.0D, 0.0D);
-        world.spawnParticle(EnumParticleTypes.SPELL_WITCH, x, y, z, 0.0D, 0.01D, 0.0D);
+        WitherStormMod.proxy.spawnPhlegmParticle(world, x, y, z, 0.0D, 0.01D, 0.0D);
     }
 }

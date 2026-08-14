@@ -1,18 +1,25 @@
 package com.wdcftgg.witherstormmod.mixin;
 
 import com.wdcftgg.witherstormmod.common.access.EntityLivingBaseExperienceAccess;
+import com.wdcftgg.witherstormmod.common.access.EntityLivingBaseDeathProtectionAccess;
+import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.DamageSource;
 import net.minecraftforge.event.ForgeEventFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(EntityLivingBase.class)
-public abstract class EntityLivingBaseMixin implements EntityLivingBaseExperienceAccess {
+public abstract class EntityLivingBaseMixin implements EntityLivingBaseExperienceAccess,
+        EntityLivingBaseDeathProtectionAccess {
 
     @Shadow
     protected EntityPlayer attackingPlayer;
@@ -22,6 +29,9 @@ public abstract class EntityLivingBaseMixin implements EntityLivingBaseExperienc
 
     @Unique
     private boolean witherstormmod$skipNextExperienceDrop;
+
+    @Unique
+    private boolean witherstormmod$deathProtectionActive;
 
     @Override
     public int witherstormmod$captureExperienceDrop() {
@@ -33,6 +43,44 @@ public abstract class EntityLivingBaseMixin implements EntityLivingBaseExperienc
     @Override
     public void witherstormmod$skipNextExperienceDrop() {
         witherstormmod$skipNextExperienceDrop = true;
+    }
+
+    @Override
+    public void witherstormmod$setDeathProtectionActive(boolean active) {
+        witherstormmod$deathProtectionActive = active;
+    }
+
+    @Override
+    public boolean witherstormmod$isDeathProtectionActive() {
+        return witherstormmod$deathProtectionActive;
+    }
+
+    @Inject(
+            method = "checkTotemDeathProtection(Lnet/minecraft/util/DamageSource;)Z",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/entity/EntityLivingBase;setHealth(F)V"))
+    private void witherstormmod$markDeathProtection(
+            DamageSource source, CallbackInfoReturnable<Boolean> callbackInfo) {
+        witherstormmod$deathProtectionActive = true;
+    }
+
+    @Inject(
+            method = "checkTotemDeathProtection(Lnet/minecraft/util/DamageSource;)Z",
+            at = @At("TAIL"),
+            cancellable = true)
+    private void witherstormmod$evolveDyingWitherStorm(
+            DamageSource source, CallbackInfoReturnable<Boolean> callbackInfo) {
+        if ((Object) this instanceof WitherStormEntity
+                && ((WitherStormEntity) (Object) this).tryEvolveFromDeathProtection(source)) {
+            callbackInfo.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "clearActivePotions()V", at = @At("RETURN"))
+    private void witherstormmod$resetDeathProtection(CallbackInfo callbackInfo) {
+        EntityLivingBase entity = (EntityLivingBase) (Object) this;
+        if (!entity.world.isRemote) witherstormmod$deathProtectionActive = false;
     }
 
     @WrapOperation(

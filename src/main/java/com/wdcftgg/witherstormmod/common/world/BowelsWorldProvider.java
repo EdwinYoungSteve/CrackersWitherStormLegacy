@@ -1,5 +1,6 @@
 package com.wdcftgg.witherstormmod.common.world;
 
+import com.wdcftgg.witherstormmod.client.resources.WitherStormResourceConfigManager;
 import net.minecraft.init.Biomes;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.DimensionType;
@@ -42,7 +43,13 @@ public class BowelsWorldProvider extends WorldProvider {
 
     @Override
     public Vec3d getFogColor(float celestialAngle, float partialTicks) {
-        return new Vec3d(1.0D, 0.41960785D, 0.972549D);
+        java.awt.Color color = WitherStormResourceConfigManager.INSTANCE.getBowelsFogColor();
+        if (color != null) {
+            return new Vec3d(color.getRed() / 255.0D, color.getGreen() / 255.0D,
+                    color.getBlue() / 255.0D);
+        }
+        // 上游未配置 bowels_fog 时回退到 NetherEffects 默认雾色。
+        return new Vec3d(0.2D, 0.03D, 0.03D);
     }
 
     @Override

@@ -24,7 +24,7 @@ public final class RecipeResourceConverter {
 
     static {
         Map<String, ItemMapping> mappings = new HashMap<String, ItemMapping>();
-        mappings.put("minecraft:suspicious_stew", item("minecraft:mushroom_stew"));
+        mappings.put("minecraft:suspicious_stew", item("futuremc:suspicious_stew"));
         mappings.put("minecraft:wither_skeleton_skull", item("minecraft:skull", 1));
         mappings.put("minecraft:cod", item("minecraft:fish", 0));
         mappings.put("minecraft:salmon", item("minecraft:fish", 1));
@@ -32,12 +32,14 @@ public final class RecipeResourceConverter {
         mappings.put("minecraft:lapis_lazuli", item("minecraft:dye", 4));
         mappings.put("minecraft:firework_rocket", item("minecraft:fireworks"));
         mappings.put("minecraft:spyglass", item("minecraft:glass_bottle"));
-        mappings.put("minecraft:barrel", item("minecraft:chest"));
+        mappings.put("minecraft:barrel", item("futuremc:barrel"));
         mappings.put("minecraft:golden_apple", item("minecraft:golden_apple", 0));
-        mappings.put("minecraft:crossbow", item("minecraft:bow"));
+        mappings.put("minecraft:crossbow", item("futuremc:crossbow"));
         mappings.put("minecraft:phantom_membrane", item("minecraft:leather"));
-        mappings.put("minecraft:honey_bottle", item("minecraft:glass_bottle"));
-        mappings.put("minecraft:honeycomb", item("minecraft:sugar"));
+        mappings.put("minecraft:honey_bottle", item("futuremc:honey_bottle"));
+        mappings.put("minecraft:honeycomb", item("futuremc:honeycomb"));
+        mappings.put("minecraft:wither_rose", item("futuremc:wither_rose"));
+        mappings.put("minecraft:bell", item("futuremc:bell"));
         ITEM_MAPPINGS = Collections.unmodifiableMap(mappings);
     }
 
@@ -194,7 +196,7 @@ public final class RecipeResourceConverter {
             choices.add(item("minecraft:slime_ball").toIngredientJson(null));
             choices.add(item("minecraft:magma_cream").toIngredientJson(null));
         } else if ("witherstormmod:cure_ingredient".equals(tag)) {
-            choices.add(item("minecraft:red_flower", 0).toIngredientJson(null));
+            choices.add(item("futuremc:wither_rose").toIngredientJson(null));
             choices.add(item("witherstormmod:withered_flesh").toIngredientJson(null));
             choices.add(item("witherstormmod:withered_bone").toIngredientJson(null));
             choices.add(item("witherstormmod:withered_spider_eye").toIngredientJson(null));

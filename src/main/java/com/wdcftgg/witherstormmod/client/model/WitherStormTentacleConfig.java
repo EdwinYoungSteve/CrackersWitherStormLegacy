@@ -12,7 +12,10 @@ final class WitherStormTentacleConfig {
             case DEVOURER: applyDevourer(tentacles); break;
             case DISMANTLED: applyDismantled(tentacles); break;
             case EVOLVED_DESTROYER: applyEvolvedDestroyer(tentacles); break;
-            case EVOLVED_DEVOURER: applyEvolvedDevourer(tentacles); break;
+            case EVOLVED_DEVOURER:
+            case TORN_EVOLVED_DEVOURER:
+                applyEvolvedDevourer(tentacles);
+                break;
             case HUNCHBACK_3_1: applyHunchback3_1(tentacles); break;
             case HUNCHBACK_3_2: applyHunchback3_2(tentacles); break;
             case INTERMEDIATE_DEVOURER: applyIntermediateDevourer(tentacles); break;

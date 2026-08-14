@@ -3,19 +3,16 @@ package com.wdcftgg.witherstormmod.common.item;
 import com.wdcftgg.witherstormmod.common.advancement.ModCriteriaTriggers;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.init.ModCreativeTabs;
+import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.EnumAction;
 import net.minecraft.item.EnumRarity;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -28,14 +25,11 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
-public class PhasometerItem extends Item {
+public class PhasometerItem extends LegacySpyglassItem {
 
     public static final String UPGRADED = "IsUpgraded";
-    public static final int USE_DURATION = 1200;
     private static final double ENTITY_TRACE_DISTANCE = 10000.0D;
     private static final double OBSTRUCTION_TRACE_DISTANCE = 150.0D;
 
@@ -52,63 +46,17 @@ public class PhasometerItem extends Item {
     }
 
     @Override
-    public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, EnumHand hand) {
-        ItemStack stack = player.getHeldItem(hand);
-        clearDataTags(getOrCreateTag(stack));
-        player.setActiveHand(hand);
-        return new ActionResult<ItemStack>(EnumActionResult.SUCCESS, stack);
-    }
-
-    @Override
-    public int getMaxItemUseDuration(ItemStack stack) {
-        return USE_DURATION;
-    }
-
-    @Override
-    public EnumAction getItemUseAction(ItemStack stack) {
-        return EnumAction.BOW;
-    }
-
-    @Override
     public void onUsingTick(ItemStack stack, EntityLivingBase user, int count) {
-        if (user.world.isRemote) return;
+        if (user.world.isRemote || !(user instanceof EntityPlayerMP)) return;
 
-        NBTTagCompound tag = getOrCreateTag(stack);
-        WitherStormEntity storm = findLookedAtStorm(user.world, user);
-        if (storm == null) {
-            clearDataTags(tag);
-            return;
+        EntityPlayerMP player = (EntityPlayerMP) user;
+        Observation observation = observe(user.world, user, isUpgraded(stack));
+        ModNetwork.sendPhasometerObservation(player, player.getActiveHand(), count,
+                observation.data);
+        if (observation.visibleStorm != null) {
+            ModCriteriaTriggers.OBSERVE_WITHER_STORM.trigger(
+                    player, stack, observation.visibleStorm);
         }
-
-        RayTraceResult obstruction = rayTraceToward(user, storm, OBSTRUCTION_TRACE_DISTANCE);
-        if (obstruction == null || obstruction.typeOfHit == RayTraceResult.Type.MISS) {
-            if (user instanceof EntityPlayerMP) {
-                ModCriteriaTriggers.OBSERVE_WITHER_STORM.trigger(
-                        (EntityPlayerMP) user, stack, storm);
-            }
-            applyStormData(tag, storm, isUpgraded(stack));
-            tag.setBoolean(DataEntry.OBSTRUCTED.tagName, false);
-            return;
-        }
-
-        if (obstruction.typeOfHit == RayTraceResult.Type.BLOCK
-                && !user.world.getBlockState(obstruction.getBlockPos()).isFullBlock()) {
-            clearDataTags(tag, DataEntry.OBSTRUCTED);
-            tag.setBoolean(DataEntry.OBSTRUCTED.tagName, true);
-            return;
-        }
-        clearDataTags(tag);
-    }
-
-    @Override
-    public void onPlayerStoppedUsing(ItemStack stack, World world, EntityLivingBase user, int timeLeft) {
-        clearDataTags(getOrCreateTag(stack));
-    }
-
-    @Override
-    public ItemStack onItemUseFinish(ItemStack stack, World world, EntityLivingBase user) {
-        clearDataTags(getOrCreateTag(stack));
-        return stack;
     }
 
     @SideOnly(Side.CLIENT)
@@ -122,7 +70,7 @@ public class PhasometerItem extends Item {
     }
 
     public static boolean isUpgraded(ItemStack stack) {
-        return hasUpgradeTag(getOrCreateTag(stack));
+        return stack.hasTagCompound() && hasUpgradeTag(stack.getTagCompound());
     }
 
     static boolean hasUpgradeTag(NBTTagCompound tag) {
@@ -137,19 +85,40 @@ public class PhasometerItem extends Item {
         return entries;
     }
 
-    static void clearDataTags(NBTTagCompound tag, DataEntry... retained) {
-        List<DataEntry> retainedEntries = retained.length == 0
-                ? Collections.<DataEntry>emptyList() : Arrays.asList(retained);
-        for (DataEntry entry : DataEntry.values()) {
-            if (!retainedEntries.contains(entry)) tag.removeTag(entry.tagName);
-        }
-    }
-
     private static void applyStormData(NBTTagCompound tag, WitherStormEntity storm,
                                        boolean upgraded) {
         for (DataEntry entry : DataEntry.values()) {
             if (!entry.requiresUpgraded || upgraded) entry.apply(tag, storm);
             else tag.removeTag(entry.tagName);
+        }
+    }
+
+    private static Observation observe(World world, EntityLivingBase user, boolean upgraded) {
+        NBTTagCompound observation = new NBTTagCompound();
+        if (world == null || user == null) return new Observation(observation, null);
+        WitherStormEntity storm = findLookedAtStorm(world, user);
+        if (storm == null) return new Observation(observation, null);
+
+        RayTraceResult obstruction = rayTraceToward(user, storm, OBSTRUCTION_TRACE_DISTANCE);
+        if (obstruction == null || obstruction.typeOfHit == RayTraceResult.Type.MISS) {
+            applyStormData(observation, storm, upgraded);
+            observation.setBoolean(DataEntry.OBSTRUCTED.tagName, false);
+            return new Observation(observation, storm);
+        } else if (obstruction.typeOfHit == RayTraceResult.Type.BLOCK
+                && !world.getBlockState(obstruction.getBlockPos()).isFullBlock()) {
+            observation.setBoolean(DataEntry.OBSTRUCTED.tagName, true);
+        }
+        return new Observation(observation, null);
+    }
+
+    private static final class Observation {
+        private final NBTTagCompound data;
+        @Nullable
+        private final WitherStormEntity visibleStorm;
+
+        private Observation(NBTTagCompound data, @Nullable WitherStormEntity visibleStorm) {
+            this.data = data;
+            this.visibleStorm = visibleStorm;
         }
     }
 
@@ -162,8 +131,7 @@ public class PhasometerItem extends Item {
         double nearestDistance = Double.MAX_VALUE;
         for (Entity candidate : world.getEntitiesWithinAABBExcludingEntity(user, searchBounds)) {
             if (candidate.isDead
-                    || candidate instanceof EntityPlayer && ((EntityPlayer) candidate).isSpectator()
-                    || !candidate.canBeCollidedWith()) continue;
+                    || candidate instanceof EntityPlayer && ((EntityPlayer) candidate).isSpectator()) continue;
             AxisAlignedBB bounds = candidate.getEntityBoundingBox().grow(candidate.getCollisionBorderSize());
             RayTraceResult intercept = bounds.calculateIntercept(start, end);
             Vec3d hit = bounds.contains(start) ? start : intercept == null ? null : intercept.hitVec;
@@ -195,25 +163,12 @@ public class PhasometerItem extends Item {
         return phase == 5 && consumedMass >= phaseRequirement;
     }
 
-    static int phaseProgressPercent(int phase, float progress) {
-        return phase < 7 ? Math.round(progress * 100.0F) : 100;
-    }
-
     static String ultimateTargetDirection(Vec3d stormPosition, double stormEyeY,
                                           Vec3d targetPosition) {
         Vec3d direction = new Vec3d(targetPosition.x, stormEyeY, targetPosition.z)
                 .subtract(stormPosition).normalize();
         return EnumFacing.getFacingFromVector((float) direction.x, (float) direction.y,
                 (float) direction.z).getName();
-    }
-
-    static NBTTagCompound getOrCreateTag(ItemStack stack) {
-        NBTTagCompound tag = stack.getTagCompound();
-        if (tag == null) {
-            tag = new NBTTagCompound();
-            stack.setTagCompound(tag);
-        }
-        return tag;
     }
 
     @Override
@@ -278,7 +233,8 @@ public class PhasometerItem extends Item {
                     break;
                 case PHASE_PROGRESS:
                     tag.setInteger(tagName,
-                            phaseProgressPercent(storm.getPhase(), storm.getPhaseProgress()));
+                            storm.canEvolve(true)
+                                    ? Math.round(storm.getPhaseProgress() * 100.0F) : 100);
                     break;
                 default:
                     break;

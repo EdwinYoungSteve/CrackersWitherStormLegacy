@@ -41,10 +41,19 @@ public class UpstreamResourcePack extends FileResourcePack {
             byte[] english = readResource(LanguageResourceConverter.englishSourceName());
             return new ByteArrayInputStream(LanguageResourceConverter.convert(localized, english));
         }
+        if (SoundResourceConverter.handles(name)) {
+            return new ByteArrayInputStream(SoundResourceConverter.convert(readResource(name)));
+        }
         if (isModernDefinition(name)) {
             throw new FileNotFoundException(name);
         }
         String mappedName = mapLegacyTexturePath(name);
+        if (isLegacyParticleTexture(mappedName)) {
+            InputStream normalized = normalizedParticleTexture(mappedName);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
         if (isBlockTexture(mappedName)) {
             InputStream normalized = normalizedBlockTexture(mappedName);
             if (normalized != null) {
@@ -66,10 +75,16 @@ public class UpstreamResourcePack extends FileResourcePack {
             return super.hasResourceName(LanguageResourceConverter.sourceName(name))
                     && super.hasResourceName(LanguageResourceConverter.englishSourceName());
         }
+        if (SoundResourceConverter.handles(name)) {
+            return super.hasResourceName(name);
+        }
         if (isModernDefinition(name)) {
             return false;
         }
         String mappedName = mapLegacyTexturePath(name);
+        if (isLegacyParticleTexture(mappedName)) {
+            return hasResourceNameDirect(mappedName);
+        }
         if (isBlockTexture(mappedName) && hasNormalizedBlockTexture(mappedName)) {
             return true;
         }
@@ -123,6 +138,46 @@ public class UpstreamResourcePack extends FileResourcePack {
         }
     }
 
+    private InputStream normalizedParticleTexture(String name) throws IOException {
+        if (!hasResourceNameDirect(name)) {
+            return null;
+        }
+        BufferedImage image;
+        try (InputStream source = super.getInputStreamByName(name)) {
+            image = ImageIO.read(source);
+        }
+        if (image == null || image.getWidth() <= 0 || image.getHeight() % image.getWidth() != 0) {
+            if (image != null) image.flush();
+            return super.getInputStreamByName(name);
+        }
+
+        int frameCount = image.getHeight() / image.getWidth();
+        int frameSize = Math.max(16, nextPowerOfTwo(image.getWidth()));
+        if (image.getWidth() == frameSize) {
+            image.flush();
+            return super.getInputStreamByName(name);
+        }
+
+        BufferedImage normalized = new BufferedImage(
+                frameSize, frameSize * frameCount, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = normalized.createGraphics();
+        try {
+            graphics.setRenderingHint(
+                    RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            graphics.drawImage(image, 0, 0, normalized.getWidth(), normalized.getHeight(), null);
+        } finally {
+            graphics.dispose();
+            image.flush();
+        }
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ImageIO.write(normalized, "png", output);
+            return new ByteArrayInputStream(output.toByteArray());
+        } finally {
+            normalized.flush();
+        }
+    }
+
     private boolean hasNormalizedBlockTexture(String name) {
         if (!hasResourceNameDirect(name)) {
             return false;
@@ -138,6 +193,25 @@ public class UpstreamResourcePack extends FileResourcePack {
         return name.startsWith("assets/")
                 && (name.contains("/textures/blocks/") || name.contains("/textures/block/"))
                 && name.endsWith(".png");
+    }
+
+    private static boolean isLegacyParticleTexture(String name) {
+        if (!name.startsWith("assets/witherstormmod/textures/particle/") || !name.endsWith(".png")) {
+            return false;
+        }
+        String fileName = name.substring(name.lastIndexOf('/') + 1);
+        return "command_block.png".equals(fileName)
+                || "command_block_1.png".equals(fileName)
+                || "command_block_2.png".equals(fileName)
+                || "command_block_3.png".equals(fileName)
+                || "phlegm.png".equals(fileName)
+                || "tractor_beam.png".equals(fileName);
+    }
+
+    private static int nextPowerOfTwo(int value) {
+        int result = 1;
+        while (result < value) result <<= 1;
+        return result;
     }
 
     private static String mapLegacyTexturePath(String name) {

@@ -10,21 +10,26 @@ import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
+import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
-import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.JsonToNBT;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.ITickable;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
@@ -42,7 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity implements ITickable, IInventory {
+public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity implements ITickable, ISidedInventory {
 
     public static final int MAX_ITEMS = 16;
     public static final int RESUMMON_START = SuperBeaconLogic.RESUMMON_START;
@@ -64,6 +69,7 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     @Override
     public void update() {
         if (world == null) return;
+        tickBeaconBase();
         int previousLevel = beaconLevel;
         beaconLevel = calculateBeaconLevel();
         if (beaconLevel != previousLevel) {
@@ -72,8 +78,6 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
             if (active == wasActive) markAndNotify();
         }
         findSupportBeacons();
-        if (effect != null && !getValidEffects().contains(effect)) effect = null;
-        tickBeaconBase();
         if (world.isRemote) {
             if (isDoingResummonAnimation()) {
                 resummonTicks++;
@@ -105,7 +109,8 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
             ItemStack result = recipe.createResult();
             if (!result.isEmpty()) {
                 clear();
-                EntityItem item = new EntityItem(world, pos.getX() + 0.5D, pos.getY() + 2.0D, pos.getZ() + 0.5D, result);
+                EntityItem item = new EntityItem(world, pos.getX(), pos.getY() + 2.0D,
+                        pos.getZ(), result);
                 item.setNoDespawn();
                 world.spawnEntity(item);
                 ModNetwork.sendSuperBeaconParticles(world, pos,
@@ -119,7 +124,8 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     protected void applyEffect() {
         int amplifier = Math.max(0, beaconLevel - 1);
         for (net.minecraft.entity.player.EntityPlayer player : world.playerEntities) {
-            if (player.getDistanceSqToCenter(pos) <= SuperBeaconLogic.MAIN_EFFECT_RADIUS
+            if (player.getDistanceSq(pos.getX(), pos.getY(), pos.getZ())
+                    <= SuperBeaconLogic.MAIN_EFFECT_RADIUS
                     * SuperBeaconLogic.MAIN_EFFECT_RADIUS) {
                 player.addPotionEffect(new PotionEffect(effect,
                         SuperBeaconLogic.MAIN_EFFECT_DURATION, amplifier, true, true));
@@ -153,13 +159,18 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
         NBTTagCompound persistent = player.getEntityData().getCompoundTag(
                 net.minecraft.entity.player.EntityPlayer.PERSISTED_NBT_TAG);
         if (persistent.getBoolean("WitherStormActivatedSuperBeacon")
-                || connected.size() < SupportColor.values().length || isPoweringUp()) return;
+                || connected.size() < SupportColor.values().length) return;
         poweringUpAnimation = SuperBeaconLogic.POWER_UP_ANIMATION_TIME;
         activationAnimation = 0.0F;
         previousActivationAnimation = 0.0F;
         doActivationSequence();
+        ModNetwork.playGlobalSoundAll(world, ModSounds.get("withered_beacon_power_up"), 1.0F, 1.0F);
+        for (EntityPlayerMP nearby : world.getEntitiesWithinAABB(EntityPlayerMP.class,
+                new AxisAlignedBB(pos).grow(64.0D))) {
+            ModNetwork.stopSound(nearby, ModSounds.get("withered_beacon_ambient"), SoundCategory.BLOCKS);
+        }
         for (BlockPos supportPos : connected.values()) {
-            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(supportPos);
+            TileEntity tile = world.getTileEntity(supportPos);
             if (tile instanceof AbstractSuperBeaconTileEntity) {
                 AbstractSuperBeaconTileEntity support = (AbstractSuperBeaconTileEntity) tile;
                 support.poweringUpAnimation = SuperBeaconLogic.POWER_UP_ANIMATION_TIME;
@@ -168,27 +179,27 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
                 support.doActivationSequence();
             }
         }
-        com.wdcftgg.witherstormmod.common.network.ModNetwork.playGlobalSoundAll(
-                world, com.wdcftgg.witherstormmod.common.init.ModSounds.get("withered_beacon_power_up"), 1.0F, 1.0F);
         markAndNotify();
     }
 
     @Override
     protected void doPoweringUpAnimation() {
         if (!world.isRemote && poweringUpAnimation == SuperBeaconLogic.POWER_UP_CLIMAX) {
-            com.wdcftgg.witherstormmod.common.network.ModNetwork.shakeAll(world, 120.0F, 12.0F);
-            world.playEvent(2003, pos.up(), 0);
-            for (net.minecraft.entity.player.EntityPlayer nearby : world.playerEntities) {
-                if (nearby.getDistanceSqToCenter(pos) > 64.0D * 64.0D) continue;
+            ModNetwork.shakeAll(world, 120.0F, 12.0F);
+            if (world instanceof net.minecraft.world.WorldServer) {
+                ((net.minecraft.world.WorldServer) world).spawnParticle(
+                        EnumParticleTypes.DRAGON_BREATH,
+                        pos.getX(), pos.getY(), pos.getZ(), 200,
+                        world.rand.nextGaussian(), world.rand.nextGaussian(), world.rand.nextGaussian(), 0.2D);
+            }
+            for (EntityPlayerMP nearby : world.getEntitiesWithinAABB(EntityPlayerMP.class,
+                    new AxisAlignedBB(pos).grow(64.0D))) {
                 NBTTagCompound persistent = nearby.getEntityData().getCompoundTag(
                         net.minecraft.entity.player.EntityPlayer.PERSISTED_NBT_TAG);
                 persistent.setBoolean("WitherStormActivatedSuperBeacon", true);
                 nearby.getEntityData().setTag(
                         net.minecraft.entity.player.EntityPlayer.PERSISTED_NBT_TAG, persistent);
-                if (nearby instanceof EntityPlayerMP) {
-                    ModCriteriaTriggers.ACTIVATE_SUPER_BEACON.trigger(
-                            (EntityPlayerMP) nearby, connected.size());
-                }
+                ModCriteriaTriggers.ACTIVATE_SUPER_BEACON.trigger(nearby, connected.size());
             }
         }
     }
@@ -215,8 +226,8 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
         if (!witherStorm) return;
         if (SuperBeaconLogic.shouldPulseWitherStormResummon(resummonTicks)) {
             playSound("bowels_loud_hurt", 10.0F, 1.0F);
-            ModNetwork.shakeNear(world, pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D, 20.0D, 80.0F, 4.0F);
+            ModNetwork.shakeNear(world, pos.getX(), pos.getY(), pos.getZ(),
+                    20.0D, 80.0F, 4.0F);
         }
         if (SuperBeaconLogic.shouldSpawnResummonCluster(resummonTicks)
                 && world.getGameRules().getBoolean("mobGriefing")) {
@@ -228,8 +239,8 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
         if (resummonTicks == SuperBeaconLogic.getMainResummonThreshold()) {
             playSound("withered_beacon_activate", 1.0F, 1.0F);
             playSound("tremble", 10.0F, 1.0F);
-            ModNetwork.shakeNear(world, pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D, 20.0D, 80.0F, 10.0F);
+            ModNetwork.shakeNear(world, pos.getX(), pos.getY(), pos.getZ(),
+                    20.0D, 80.0F, 10.0F);
         }
         if (SuperBeaconLogic.shouldFinishResummon(resummoningEntity, resummonTicks)) {
             finishWitherStormResummon();
@@ -239,16 +250,30 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     private void activateResummonAnimation() {
         playSound("tremble", 10.0F, 1.0F);
         playSound("bowels_loud_hurt", 10.0F, 1.0F);
-        ModNetwork.shakeNear(world, pos.getX() + 0.5D, pos.getY() + 0.5D,
-                pos.getZ() + 0.5D, 20.0D, 80.0F, 10.0F);
+        ModNetwork.shakeNear(world, pos.getX(), pos.getY(), pos.getZ(),
+                20.0D, 80.0F, 10.0F);
     }
 
     private void spawnOrdinaryResummonedEntity() {
         Entity entity = EntityList.createEntityByIDFromName(new ResourceLocation(resummoningEntity), world);
         if (entity == null) return;
+        BlockPos spawnPosition = pos.up(3);
+        entity.setLocationAndAngles(spawnPosition.getX() + 0.5D, spawnPosition.getY(),
+                spawnPosition.getZ() + 0.5D,
+                world.rand.nextFloat() * 360.0F, 0.0F);
+        if (entity instanceof EntityLiving) {
+            ((EntityLiving) entity).onInitialSpawn(
+                    world.getDifficultyForLocation(spawnPosition), null);
+        }
+        if (!world.spawnEntity(entity)) return;
+        for (EntityPlayerMP player : world.getEntitiesWithinAABB(EntityPlayerMP.class,
+                getResummonAdvancementBox(pos))) {
+            ModCriteriaTriggers.SUMMON_MOB_SUPER_BEACON.trigger(player, entity);
+        }
         if (!resummoningEntityNbt.isEmpty()) {
             try {
-                NBTTagCompound entityData = JsonToNBT.getTagFromJson(resummoningEntityNbt);
+                NBTTagCompound entityData = convertResummonEntityData(
+                        JsonToNBT.getTagFromJson(resummoningEntityNbt));
                 NBTTagCompound currentData = entity.writeToNBT(new NBTTagCompound());
                 entity.readFromNBT(mergeResummonEntityData(currentData, entityData));
             } catch (Exception exception) {
@@ -256,14 +281,17 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
                         resummoningEntity, exception);
             }
         }
-        entity.setLocationAndAngles(pos.getX() + 0.5D, pos.getY() + 3.0D, pos.getZ() + 0.5D,
-                world.rand.nextFloat() * 360.0F, 0.0F);
-        if (world.spawnEntity(entity)) {
-            for (EntityPlayerMP player : world.getEntitiesWithinAABB(EntityPlayerMP.class,
-                    getResummonAdvancementBox(pos))) {
-                ModCriteriaTriggers.SUMMON_MOB_SUPER_BEACON.trigger(player, entity);
+    }
+
+    private static NBTTagCompound convertResummonEntityData(NBTTagCompound recipeData) {
+        NBTTagCompound converted = recipeData == null ? new NBTTagCompound() : recipeData.copy();
+        if (converted.hasKey("CustomName", Constants.NBT.TAG_COMPOUND)) {
+            NBTTagCompound component = converted.getCompoundTag("CustomName");
+            if (component.hasKey("text", Constants.NBT.TAG_STRING)) {
+                converted.setString("CustomName", component.getString("text"));
             }
         }
+        return converted;
     }
 
     static NBTTagCompound mergeResummonEntityData(NBTTagCompound currentData,
@@ -303,23 +331,18 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     private static boolean canUseResummonBlock(net.minecraft.world.World world, BlockPos blockPos,
                                                 IBlockState state) {
         Block block = state.getBlock();
-        if (block == Blocks.AIR || state.getMaterial().isLiquid()) return false;
-        if (block == Blocks.BEDROCK || block == Blocks.BARRIER || block == Blocks.END_PORTAL
-                || block == Blocks.END_PORTAL_FRAME || block == Blocks.END_GATEWAY
-                || block == Blocks.STRUCTURE_BLOCK || block == Blocks.STRUCTURE_VOID
-                || block == Blocks.COMMAND_BLOCK || block == Blocks.CHAIN_COMMAND_BLOCK
-                || block == Blocks.REPEATING_COMMAND_BLOCK) return false;
-        if (block == Blocks.LEAVES || block == Blocks.LEAVES2
-                || block == Blocks.LAPIS_BLOCK
+        if (UpstreamBlockTags.contains(UpstreamBlockTags.WITHER_STORM_BLOCK_BLACKLIST,
+                state)) return false;
+        if (block == Blocks.LAPIS_BLOCK || isVanillaBeaconBase(block)
                 || SuperBeaconLogic.SupportColor.forBase(block) != null) return false;
         if (block == ModBlocks.get("super_beacon") || block == ModBlocks.get("super_support_beacon")
                 || block == ModBlocks.get("withered_phlegm_block")
                 || block == ModBlocks.get("formidibomb")) return false;
-        return state.getBlockHardness(world, blockPos) >= 0.0F;
+        return true;
     }
 
     private void updateResummonClusters() {
-        Vec3d target = new Vec3d(pos).add(0.5D, 3.5D, 0.5D);
+        Vec3d target = new Vec3d(pos).add(0.0D, 3.0D, 0.0D);
         Iterator<SupplementalEntities.BlockClusterEntity> iterator = resummonClusters.iterator();
         while (iterator.hasNext()) {
             SupplementalEntities.BlockClusterEntity cluster = iterator.next();
@@ -352,14 +375,14 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
 
         world.setBlockToAir(pos);
         for (BlockPos support : supports) world.setBlockToAir(support);
-        world.newExplosion(null, pos.getX() + 0.5D, pos.getY() + 0.5D,
-                pos.getZ() + 0.5D, 8.0F, false, true);
+        world.newExplosion(null, pos.getX(), pos.getY(), pos.getZ(),
+                8.0F, false, true);
 
         WitherStormEntity storm = new WitherStormEntity(world);
         storm.initializeFromSuperBeacon(WitherStormConfig.resummonedPhase);
-        storm.setLocationAndAngles(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                pos.getZ() + 0.5D, world.rand.nextFloat() * 360.0F, 0.0F);
-        ModNetwork.playGlobalSound(world, ModSounds.get("wither_storm_evolves"), 1.0F, 1.0F);
+        storm.setLocationAndAngles(pos.getX(), pos.getY(), pos.getZ(),
+                world.rand.nextFloat() * 360.0F, 0.0F);
+        storm.playSoundToEveryone(ModSounds.get("wither_storm_evolves"), 1.0F, 1.0F);
         if (world.spawnEntity(storm)) {
             for (EntityPlayerMP player : world.getEntitiesWithinAABB(EntityPlayerMP.class,
                     getResummonAdvancementBox(pos))) {
@@ -400,8 +423,7 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
 
     private void playSoundAt(BlockPos soundPos, String name, float volume, float pitch) {
         if (ModSounds.get(name) == null) return;
-        world.playSound(null, soundPos, ModSounds.get(name), SoundCategory.BLOCKS, volume,
-                pitch + (world.rand.nextFloat() - 0.5F) * 0.35F);
+        world.playSound(null, soundPos, ModSounds.get(name), SoundCategory.BLOCKS, volume, pitch);
     }
 
     private boolean canCraftCondition(String condition) {
@@ -437,16 +459,29 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     }
 
     private void findSupportBeacons() {
-        connected.clear();
-        if (!active) return;
-        for (BlockPos check : BlockPos.getAllInBox(pos.add(-5, -5, -5), pos.add(5, 5, 5))) {
-            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(check);
-            if (tile instanceof SuperSupportBeaconTileEntity && check.distanceSq(pos) <= 25.0D) {
-                SuperSupportBeaconTileEntity support = (SuperSupportBeaconTileEntity) tile;
-                SupportColor color = support.getColor();
-                if (color != null) connected.put(color, check.toImmutable());
+        AxisAlignedBB searchBox = new AxisAlignedBB(pos).grow(SuperBeaconLogic.SUPPORT_SCAN_DISTANCE);
+        Iterator<BlockPos> connectedIterator = connected.values().iterator();
+        while (connectedIterator.hasNext()) {
+            TileEntity connectedTile = world.getTileEntity(connectedIterator.next());
+            if (!isValidSupportBeacon(connectedTile)) connectedIterator.remove();
+        }
+        for (TileEntity tile : new ArrayList<TileEntity>(world.loadedTileEntityList)) {
+            if (!(tile instanceof SuperSupportBeaconTileEntity)
+                    || !searchBox.intersects(new AxisAlignedBB(tile.getPos()))) continue;
+            SuperSupportBeaconTileEntity support = (SuperSupportBeaconTileEntity) tile;
+            if (!isValidSupportBeacon(support)
+                    || tile.getPos().distanceSq(pos) > SuperBeaconLogic.SUPPORT_SCAN_DISTANCE
+                    * SuperBeaconLogic.SUPPORT_SCAN_DISTANCE) continue;
+            SupportColor color = support.getColor();
+            if (color != null && !connected.containsKey(color)) {
+                connected.put(color, tile.getPos().toImmutable());
             }
         }
+    }
+
+    private boolean isValidSupportBeacon(TileEntity tile) {
+        return active && tile instanceof SuperSupportBeaconTileEntity && !tile.isInvalid()
+                && ((SuperSupportBeaconTileEntity) tile).getColor() != null;
     }
 
     public boolean addItem(ItemStack stack) {
@@ -558,10 +593,21 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     @Override public void openInventory(net.minecraft.entity.player.EntityPlayer player) { }
     @Override public void closeInventory(net.minecraft.entity.player.EntityPlayer player) { }
     @Override public boolean isItemValidForSlot(int index, ItemStack stack) { return !isDoingResummonAnimation(); }
+    @Override public int[] getSlotsForFace(EnumFacing side) {
+        int[] slots = new int[items.size()];
+        for (int index = 0; index < slots.length; index++) slots[index] = index;
+        return slots;
+    }
+    @Override public boolean canInsertItem(int index, ItemStack stack, EnumFacing direction) {
+        return direction != EnumFacing.DOWN && index >= 0 && index < MAX_ITEMS
+                && !isDoingResummonAnimation();
+    }
+    @Override public boolean canExtractItem(int index, ItemStack stack, EnumFacing direction) { return false; }
     @Override public int getFieldCount() { return 4; }
     @Override public void clear() { for (int i = 0; i < items.size(); i++) items.set(i, ItemStack.EMPTY); markAndNotify(); }
-    @Override public String getName() { return "container.witherstormmod.super_beacon"; }
-    @Override public boolean hasCustomName() { return false; }
+    @Override public String getName() { return customName == null || customName.isEmpty()
+            ? "container.witherstormmod.withered_beacon" : customName; }
+    @Override public boolean hasCustomName() { return customName != null && !customName.isEmpty(); }
 
     public enum SupportColor {
         AQUA(SuperBeaconLogic.SupportColor.AQUA),

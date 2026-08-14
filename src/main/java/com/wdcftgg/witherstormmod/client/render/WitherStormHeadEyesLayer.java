@@ -23,21 +23,41 @@ public final class WitherStormHeadEyesLayer implements LayerRenderer<Supplementa
     @Override
     public void doRenderLayer(SupplementalEntities.WitherStormHeadEntity entity, float limbSwing, float limbSwingAmount,
                               float partialTicks, float ageInTicks, float netHeadYaw, float headPitch, float scale) {
-        ResourceLocation texture = entity.isHurt() ? EMISSIVE_HURT : EMISSIVE;
+        boolean additive = !entity.isPlayingDead();
+        ResourceLocation texture = additive && entity.isHurt() ? EMISSIVE_HURT : EMISSIVE;
         renderer.bindTexture(texture);
-        GlStateManager.enableBlend();
-        GlStateManager.disableAlpha();
-        GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE);
-        GlStateManager.depthMask(true);
+        float previousBrightnessX = OpenGlHelper.lastBrightnessX;
+        float previousBrightnessY = OpenGlHelper.lastBrightnessY;
+        if (additive) {
+            GlStateManager.enableBlend();
+            GlStateManager.disableAlpha();
+            GlStateManager.disableCull();
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ONE);
+            GlStateManager.depthMask(false);
+        } else {
+            GlStateManager.disableBlend();
+            GlStateManager.enableAlpha();
+            GlStateManager.enableCull();
+            GlStateManager.depthMask(true);
+        }
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 61680.0F, 0.0F);
-        WitherStormHeadModel model = (WitherStormHeadModel) renderer.getMainModel();
-        model.setModelAttributes(renderer.getMainModel());
-        model.setLivingAnimations(entity, limbSwing, limbSwingAmount, partialTicks);
-        model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch, scale);
-        renderer.setLightmap(entity);
-        GlStateManager.enableAlpha();
-        GlStateManager.disableBlend();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        try {
+            WitherStormHeadModel model = (WitherStormHeadModel) renderer.getMainModel();
+            model.setModelAttributes(renderer.getMainModel());
+            model.setLivingAnimations(entity, limbSwing, limbSwingAmount, partialTicks);
+            model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch, scale);
+        } finally {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                    previousBrightnessX, previousBrightnessY);
+            GlStateManager.depthMask(true);
+            GlStateManager.enableCull();
+            GlStateManager.enableAlpha();
+            GlStateManager.disableBlend();
+            GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        }
     }
 
     @Override

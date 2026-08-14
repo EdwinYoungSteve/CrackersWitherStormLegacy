@@ -17,6 +17,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
+import java.util.Random;
 
 public class TaintedVeinBlock extends BlockVine {
 
@@ -27,24 +28,30 @@ public class TaintedVeinBlock extends BlockVine {
         setHardness(0.4F);
         setResistance(SimpleBlock.toLegacyResistance(0.4F));
         setSoundType(SoundType.SLIME);
+        setTickRandomly(false);
+    }
+
+    @Override
+    public void updateTick(World world, BlockPos pos, IBlockState state, Random random) {
+        // 上游脉络不会通过随机刻自然蔓延。
     }
 
     @Override
     public void harvestBlock(World world, EntityPlayer player, BlockPos pos, IBlockState state,
                              @Nullable TileEntity tileEntity, ItemStack tool) {
+        if (!world.isRemote) {
+            player.addStat(StatList.getBlockStats(this));
+            player.addExhaustion(0.005F);
+        }
         if (!world.isRemote && EnchantmentHelper.getEnchantmentLevel(Enchantments.SILK_TOUCH, tool) > 0) {
             int connectedFaces = 0;
             for (net.minecraft.block.properties.PropertyBool face : ALL_FACES) {
                 if (state.getValue(face)) connectedFaces++;
             }
             if (connectedFaces > 0) {
-                player.addStat(StatList.getBlockStats(this));
-                player.addExhaustion(0.005F);
                 spawnAsEntity(world, pos, new ItemStack(this, connectedFaces));
             }
-            return;
         }
-        super.harvestBlock(world, player, pos, state, tileEntity, tool);
     }
 
     @Override

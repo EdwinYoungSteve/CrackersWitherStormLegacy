@@ -4,6 +4,7 @@ import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.WitherStormMod;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -17,13 +18,16 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /** 将上游区域票据语义映射到 1.12 Forge 的持久化区块票据。 */
@@ -39,11 +43,12 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
     private static final String CHUNKS = "Chunks";
     private static final String CHUNK_X = "X";
     private static final String CHUNK_Z = "Z";
-    private static final int STORM_RADIUS = 12;
     private static final int SEGMENT_RADIUS = 6;
     private static final int BOWELS_RADIUS = 3;
     private static final int BEACON_RADIUS = 0;
     private static final long RESTORE_GRACE_TICKS = 600L;
+    private static long lastProfileTick = Long.MIN_VALUE;
+    private static long profileNanos;
 
     public static final ChunkLoadingManager INSTANCE = new ChunkLoadingManager();
 
@@ -109,25 +114,31 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
     }
 
     private synchronized void tickWorld(WorldServer world) {
+        long profileStart = System.nanoTime();
         long now = world.getTotalWorldTime();
+        Map<String, TicketGroup> existingGroups = groupsByWorld.get(world);
+        if (!WitherStormConfig.shouldChunkLoadWhenNoPlayers && world.playerEntities.isEmpty()) {
+            if (existingGroups != null) {
+                for (TicketGroup group : existingGroups.values()) group.suspend();
+            }
+            return;
+        }
+        if (existingGroups != null) {
+            for (TicketGroup group : existingGroups.values()) group.resume(now);
+        }
+        // 每 tick 扫描（与上游检测机制一致）；风暴/分裂体/信标共用一次遍历
         List<Entity> entities = new ArrayList<Entity>(world.loadedEntityList);
         for (Entity entity : entities) {
             if (entity.isDead) continue;
             if (entity instanceof WitherStormEntity) {
-                touch(world, entityKey("storm", entity.getUniqueID()), "storm", entity.chunkCoordX, entity.chunkCoordZ,
-                        STORM_RADIUS, now);
+                String key = entityKey("storm", entity.getUniqueID());
+                touch(world, key, "storm", entity.chunkCoordX, entity.chunkCoordZ,
+                        WitherStormConfig.chunkLoadingRadius, now);
             } else if (entity instanceof SupplementalEntities.WitherStormSegmentEntity
                     && !((SupplementalEntities.WitherStormSegmentEntity) entity).isIndependentBowelsPart()) {
-                touch(world, entityKey("segment", entity.getUniqueID()), "segment", entity.chunkCoordX,
+                String key = entityKey("segment", entity.getUniqueID());
+                touch(world, key, "segment", entity.chunkCoordX,
                         entity.chunkCoordZ, SEGMENT_RADIUS, now);
-            }
-        }
-
-        if (world.provider.getDimension() == BowelsDimensions.DIMENSION_ID) {
-            for (BowelsInstanceData.Instance instance : BowelsInstanceData.get(world).getInstances()) {
-                if (instance.completed) continue;
-                ChunkPos center = new ChunkPos(instance.getArenaPosition());
-                touch(world, bowelsKey(instance.stormUuid), "bowels", center.x, center.z, BOWELS_RADIUS, now);
             }
         }
 
@@ -136,8 +147,18 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
             if (tile instanceof com.wdcftgg.witherstormmod.common.tile.AbstractSuperBeaconTileEntity
                     && !tile.isInvalid()) {
                 ChunkPos center = new ChunkPos(tile.getPos());
-                touch(world, beaconKey(tile.getPos()), "super_beacon", center.x, center.z,
+                String key = beaconKey(tile.getPos());
+                touch(world, key, "super_beacon", center.x, center.z,
                         BEACON_RADIUS, now);
+            }
+        }
+
+        if (world.provider.getDimension() == BowelsDimensions.DIMENSION_ID) {
+            for (BowelsInstanceData.Instance instance : BowelsInstanceData.get(world).getInstances()) {
+                if (instance.completed) continue;
+                ChunkPos center = new ChunkPos(instance.getArenaPosition());
+                String key = bowelsKey(instance.stormUuid);
+                touch(world, key, "bowels", center.x, center.z, BOWELS_RADIUS, now);
             }
         }
 
@@ -148,6 +169,15 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
             if (now - group.lastSeenTick > RESTORE_GRACE_TICKS) stale.add(group.key);
         }
         for (String key : stale) release(world, key);
+        long elapsed = System.nanoTime() - profileStart;
+        profileNanos += elapsed;
+        if (now - lastProfileTick >= 200) {
+            WitherStormMod.LOGGER.info("ChunkLoading worldTick profile: "
+                    + String.format(java.util.Locale.ROOT, "%.3f",
+                    profileNanos / 1000000.0D / 200) + "ms/tick");
+            lastProfileTick = now;
+            profileNanos = 0;
+        }
     }
 
     private void touch(WorldServer world, String key, String kind, int centerX, int centerZ, int radius, long now) {
@@ -175,6 +205,97 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
     public synchronized void releaseSuperBeacon(World world, BlockPos position) {
         if (world instanceof WorldServer && position != null) {
             release((WorldServer) world, beaconKey(position));
+        }
+    }
+
+    /** 供管理命令查询当前强加载分组摘要。 */
+    public static List<String> describeGroups(WorldServer world) {
+        List<String> lines = new ArrayList<String>();
+        Map<String, TicketGroup> groups = INSTANCE.groupsByWorld.get(world);
+        if (groups == null) return lines;
+        for (TicketGroup group : groups.values()) {
+            int chunkCount = 0;
+            for (ForgeChunkManager.Ticket ticket : group.tickets) {
+                chunkCount += ticket.getChunkList().size();
+            }
+            lines.add(group.key + " kind=" + group.kind
+                    + " center=" + group.centerX + "," + group.centerZ
+                    + " radius=" + group.radius
+                    + " tickets=" + group.tickets.size()
+                    + " chunks=" + chunkCount
+                    + " suspended=" + group.suspended);
+        }
+        Collections.sort(lines);
+        return lines;
+    }
+
+    public static List<LoaderDescription> describeStorms(WorldServer world) {
+        List<LoaderDescription> descriptions = new ArrayList<LoaderDescription>();
+        Map<String, TicketGroup> groups = INSTANCE.groupsByWorld.get(world);
+        if (groups == null) return descriptions;
+        for (TicketGroup group : groups.values()) {
+            if (!group.key.startsWith("storm:")) continue;
+            try {
+                descriptions.add(describe(group,
+                        UUID.fromString(group.key.substring("storm:".length()))));
+            } catch (IllegalArgumentException ignored) {
+                // Only entity-backed storm groups use this prefix.
+            }
+        }
+        Collections.sort(descriptions,
+                Comparator.comparing(description -> description.uuid.toString()));
+        return descriptions;
+    }
+
+    @Nullable
+    public static LoaderDescription describeStorm(WorldServer world, UUID uuid) {
+        Map<String, TicketGroup> groups = INSTANCE.groupsByWorld.get(world);
+        if (groups == null) return null;
+        TicketGroup group = groups.get(entityKey("storm", uuid));
+        return group == null ? null : describe(group, uuid);
+    }
+
+    private static LoaderDescription describe(TicketGroup group, UUID uuid) {
+        int chunks = 0;
+        for (ForgeChunkManager.Ticket ticket : group.tickets) {
+            chunks += ticket.getChunkList().size();
+        }
+        return new LoaderDescription(uuid, group.centerX, group.centerZ, group.radius,
+                group.tickets.size(), chunks, group.suspended);
+    }
+
+    public static final class LoaderDescription {
+        public final UUID uuid;
+        public final int centerX;
+        public final int centerZ;
+        public final int radius;
+        public final int ticketCount;
+        public final int chunkCount;
+        public final boolean suspended;
+
+        private LoaderDescription(UUID uuid, int centerX, int centerZ, int radius,
+                                  int ticketCount, int chunkCount, boolean suspended) {
+            this.uuid = uuid;
+            this.centerX = centerX;
+            this.centerZ = centerZ;
+            this.radius = radius;
+            this.ticketCount = ticketCount;
+            this.chunkCount = chunkCount;
+            this.suspended = suspended;
+        }
+    }
+
+    /** 供管理命令强制刷新当前世界的全部强加载票据。 */
+    public static void refresh(WorldServer world) {
+        Map<String, TicketGroup> groups = INSTANCE.groupsByWorld.get(world);
+        if (groups == null) return;
+        long now = world.getTotalWorldTime();
+        for (TicketGroup group : groups.values()) {
+            if (group.suspended) {
+                group.resume(now);
+            } else {
+                group.reconfigure(group.centerX, group.centerZ, group.radius);
+            }
         }
     }
 
@@ -250,6 +371,7 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
         private int radius;
         private int configuredChunks;
         private long lastSeenTick;
+        private boolean suspended;
 
         private TicketGroup(WorldServer world, String key, String kind, int centerX, int centerZ, int radius,
                             List<ForgeChunkManager.Ticket> tickets, long lastSeenTick) {
@@ -280,33 +402,78 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
             return configuredChunks == diameter * diameter;
         }
 
+        private void suspend() {
+            if (suspended) return;
+            for (ForgeChunkManager.Ticket ticket : tickets) {
+                for (ChunkPos position : new ArrayList<ChunkPos>(ticket.getChunkList())) {
+                    ForgeChunkManager.unforceChunk(ticket, position);
+                }
+            }
+            configuredChunks = 0;
+            suspended = true;
+        }
+
+        private void resume(long currentTick) {
+            if (!suspended) return;
+            suspended = false;
+            lastSeenTick = currentTick;
+            reconfigure(centerX, centerZ, radius);
+        }
+
         private void reconfigure(int newCenterX, int newCenterZ, int newRadius) {
+            suspended = false;
             centerX = newCenterX;
             centerZ = newCenterZ;
             radius = Math.max(0, newRadius);
             List<ChunkPos> desired = createChunkPlan(centerX, centerZ, radius);
+            Set<ChunkPos> desiredSet = new HashSet<ChunkPos>(desired);
             int capacity = ForgeChunkManager.getMaxChunkDepthFor(Tags.MOD_ID);
             int ticketCount = requiredTicketCount(desired.size(), capacity);
+            Set<ForgeChunkManager.Ticket> changedTickets = Collections.newSetFromMap(
+                    new IdentityHashMap<ForgeChunkManager.Ticket, Boolean>());
 
             while (tickets.size() < ticketCount) {
                 ForgeChunkManager.Ticket ticket = ForgeChunkManager.requestTicket(
                         WitherStormMod.INSTANCE, world, ForgeChunkManager.Type.NORMAL);
                 if (ticket == null) break;
                 tickets.add(ticket);
+                changedTickets.add(ticket);
             }
             while (tickets.size() > ticketCount) {
                 ForgeChunkManager.Ticket ticket = tickets.remove(tickets.size() - 1);
                 ForgeChunkManager.releaseTicket(ticket);
             }
 
-            configuredChunks = 0;
-            int chunkIndex = 0;
-            int batchCapacity = capacity <= 0 ? desired.size() : capacity;
+            Map<ForgeChunkManager.Ticket, List<ChunkPos>> assignments =
+                    new IdentityHashMap<ForgeChunkManager.Ticket, List<ChunkPos>>();
+            Set<ChunkPos> assigned = new HashSet<ChunkPos>();
+            for (ForgeChunkManager.Ticket ticket : tickets) {
+                List<ChunkPos> retained = new ArrayList<ChunkPos>();
+                for (ChunkPos previous : new ArrayList<ChunkPos>(ticket.getChunkList())) {
+                    if (desiredSet.contains(previous) && assigned.add(previous)) {
+                        retained.add(previous);
+                    } else {
+                        ForgeChunkManager.unforceChunk(ticket, previous);
+                        changedTickets.add(ticket);
+                    }
+                }
+                assignments.put(ticket, retained);
+            }
+
+            int batchCapacity = capacity <= 0 ? Integer.MAX_VALUE : capacity;
+            for (ChunkPos position : desired) {
+                if (assigned.contains(position)) continue;
+                ForgeChunkManager.Ticket destination = findTicketWithCapacity(tickets, assignments, batchCapacity);
+                if (destination == null) break;
+                ForgeChunkManager.forceChunk(destination, position);
+                assignments.get(destination).add(position);
+                assigned.add(position);
+                changedTickets.add(destination);
+            }
+
+            configuredChunks = assigned.size();
             for (int ticketIndex = 0; ticketIndex < tickets.size(); ticketIndex++) {
                 ForgeChunkManager.Ticket ticket = tickets.get(ticketIndex);
-                for (ChunkPos previous : new ArrayList<ChunkPos>(ticket.getChunkList())) {
-                    ForgeChunkManager.unforceChunk(ticket, previous);
-                }
                 NBTTagCompound data = ticket.getModData();
                 data.setBoolean(MANAGED, true);
                 data.setString(LOADER_KEY, key);
@@ -315,23 +482,33 @@ public final class ChunkLoadingManager implements ForgeChunkManager.LoadingCallb
                 data.setInteger(CENTER_Z, centerZ);
                 data.setInteger(RADIUS, radius);
                 data.setInteger(BATCH_INDEX, ticketIndex);
-                NBTTagList chunks = new NBTTagList();
-                int end = Math.min(desired.size(), chunkIndex + batchCapacity);
-                while (chunkIndex < end) {
-                    ChunkPos position = desired.get(chunkIndex++);
-                    NBTTagCompound chunk = new NBTTagCompound();
-                    chunk.setInteger(CHUNK_X, position.x);
-                    chunk.setInteger(CHUNK_Z, position.z);
-                    chunks.appendTag(chunk);
-                    ForgeChunkManager.forceChunk(ticket, position);
-                    configuredChunks++;
+                if (changedTickets.contains(ticket) || !data.hasKey(CHUNKS, 9)) {
+                    NBTTagList chunks = new NBTTagList();
+                    for (ChunkPos position : assignments.get(ticket)) {
+                        NBTTagCompound chunk = new NBTTagCompound();
+                        chunk.setInteger(CHUNK_X, position.x);
+                        chunk.setInteger(CHUNK_Z, position.z);
+                        chunks.appendTag(chunk);
+                    }
+                    data.setTag(CHUNKS, chunks);
                 }
-                data.setTag(CHUNKS, chunks);
             }
             if (configuredChunks < desired.size()) {
                 WitherStormMod.LOGGER.error("Unable to allocate enough Forge chunk tickets for {}: loaded {}/{} chunks",
                         key, configuredChunks, desired.size());
             }
+        }
+
+        @Nullable
+        private static ForgeChunkManager.Ticket findTicketWithCapacity(
+                List<ForgeChunkManager.Ticket> tickets,
+                Map<ForgeChunkManager.Ticket, List<ChunkPos>> assignments,
+                int capacity) {
+            for (ForgeChunkManager.Ticket ticket : tickets) {
+                List<ChunkPos> chunks = assignments.get(ticket);
+                if (chunks != null && chunks.size() < capacity) return ticket;
+            }
+            return null;
         }
 
         private void release() {
