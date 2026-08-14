@@ -2225,27 +2225,6 @@ public final class SupplementalEntities {
             }
         }
 
-        /** Repairs podiums placed too high by legacy builds without resetting the boss phase. */
-        public void repairPlacedPodiumAlignment() {
-            if (world.isRemote) return;
-            findPodiumCluster();
-            if (podiumCluster != null || podiumClusterUuid != null) return;
-            BlockPos corePosition = getPosition();
-            Block topBlock = ModBlocks.get("tainted_dust_block");
-            boolean intersectsCore = false;
-            for (int offset = 0; offset <= 3; offset++) {
-                if (world.getBlockState(corePosition.up(offset)).getBlock() == topBlock) {
-                    intersectsCore = true;
-                    break;
-                }
-            }
-            if (!intersectsCore) return;
-            createPodiumCluster();
-            if (podiumCluster == null || podiumCluster.isDead) return;
-            alignPodiumClusterToCore();
-            finishPodiumMove();
-        }
-
         private double getAlignedPodiumClusterY() {
             int verticalCenter = MathHelper.floor(
                     (podiumCluster.getEntityBoundingBox().maxY

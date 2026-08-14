@@ -116,6 +116,9 @@ public class BowelsInstanceData extends WorldSavedData {
         public int bossPhase;
         public int bossPhaseTicks;
         public BlockPos arenaPosition;
+        /** 肠道网络主结构模板的放置原点 Y。新版按上游 BowelsStructure 对齐 100，
+         * 旧存档在升级前按旧锚点 88 放置，只能以 88 + 28 的墙头凹槽高度修复头部。 */
+        public int networkBaseY = 88;
         private int coordinateVersion = CURRENT_COORDINATE_VERSION;
 
         private Instance(UUID stormUuid, BlockPos center, int originDimension, BlockPos origin) {
@@ -150,6 +153,7 @@ public class BowelsInstanceData extends WorldSavedData {
             tag.setInteger("BossPhaseTicks", bossPhaseTicks);
             tag.setInteger("CoordinateVersion", coordinateVersion);
             if (arenaPosition != null) tag.setLong("ArenaPosition", arenaPosition.toLong());
+            tag.setInteger("NetworkBaseY", networkBaseY);
             return tag;
         }
 
@@ -178,6 +182,8 @@ public class BowelsInstanceData extends WorldSavedData {
                     ? tag.getInteger("CoordinateVersion") : 0;
             instance.arenaPosition = tag.hasKey("ArenaPosition", 4)
                     ? BlockPos.fromLong(tag.getLong("ArenaPosition")) : null;
+            instance.networkBaseY = tag.hasKey("NetworkBaseY", 3)
+                    ? tag.getInteger("NetworkBaseY") : 88;
             return instance;
         }
 
@@ -190,6 +196,11 @@ public class BowelsInstanceData extends WorldSavedData {
             int x = arenaPosition == null ? center.getX() - 3 : arenaPosition.getX();
             int z = arenaPosition == null ? center.getZ() : arenaPosition.getZ();
             return new BlockPos(x, 110, z);
+        }
+
+        /** 上游墙头偏移 Y=128 相对起始块原点 Y=100，因此凹槽位于网络原点 +28。 */
+        public int getArenaHeadY() {
+            return networkBaseY + 28;
         }
 
         public boolean needsCoordinateMigration() {

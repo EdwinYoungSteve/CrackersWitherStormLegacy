@@ -137,21 +137,29 @@ public class WitherStormRenderer extends RenderLiving<WitherStormEntity> {
                                       float netHeadYaw, float headPitch, float scaleFactor) {
         float dissolve = Math.min(deathTime, 400) / 400.0F;
         Minecraft minecraft = Minecraft.getMinecraft();
-        GlStateManager.enableAlpha();
-        GlStateManager.depthFunc(GL11.GL_LEQUAL);
-        GlStateManager.alphaFunc(GL11.GL_GEQUAL, dissolve);
-        minecraft.getTextureManager().bindTexture(explodingTexture);
-        model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch,
-                scaleFactor);
+        int previousDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
+        int previousAlphaFunc = GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC);
+        float previousAlphaReference = GL11.glGetFloat(GL11.GL_ALPHA_TEST_REF);
+        try {
+            GlStateManager.enableAlpha();
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.alphaFunc(GL11.GL_GEQUAL, dissolve);
+            minecraft.getTextureManager().bindTexture(explodingTexture);
+            model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch,
+                    scaleFactor);
 
-        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
-        GlStateManager.depthFunc(GL11.GL_EQUAL);
-        minecraft.getTextureManager().bindTexture(baseTexture);
-        model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch,
-                scaleFactor);
-        GlStateManager.depthFunc(GL11.GL_LEQUAL);
-        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1F);
+            GlStateManager.depthFunc(GL11.GL_EQUAL);
+            minecraft.getTextureManager().bindTexture(baseTexture);
+            model.render(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch,
+                    scaleFactor);
+        } finally {
+            // 恢复到进入时的深度函数与 alpha test，而不是硬编码 LEQUAL/GREATER；
+            // 死亡风暴之后的实体通道继续使用原值，异常路径也不会污染后续渲染。
+            GlStateManager.depthFunc(previousDepthFunc);
+            GlStateManager.alphaFunc(previousAlphaFunc, previousAlphaReference);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        }
     }
 
     /** 1.12 等价“远距离”判定：超出上游远距离雾阈值（200 * 渲染距离/16）。 */

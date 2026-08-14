@@ -31,6 +31,12 @@ import java.util.UUID;
 
 @Mod.EventBusSubscriber(modid = Tags.MOD_ID)
 public final class BowelsManager {
+    /** 上游 WitherStormBowelsManager 的 NORTH_HEAD_POS/SOUTH_HEAD_POS 常量，
+     * Y 分量由 instance.getArenaHeadY() 按网络锚点换算。 */
+    private static final BlockPos[] HEAD_OFFSETS = {
+            new BlockPos(-2, 0, 27), new BlockPos(-3, 0, -23)
+    };
+
     private BowelsManager() {
     }
 
@@ -159,12 +165,16 @@ public final class BowelsManager {
     public static void prepareArena(WorldServer world, BowelsInstanceData data, BowelsInstanceData.Instance instance) {
         if (instance.needsCoordinateMigration()) migrateLegacyArena(world, data, instance);
         if (!instance.prepared) {
-            StructureTemplates.placeBowelsNetwork(world, instance.center, world.rand);
+            if (StructureTemplates.placeBowelsNetwork(world, instance.center, world.rand)) {
+                // 新版网络按上游起始块原点 Y=100 放置；旧存档无此字段时保持旧锚点 88，
+                // 墙头按各自锚点 +28 修复，避免旧网络中的头部被埋入墙内。
+                instance.networkBaseY = 100;
+            }
             BlockPos arena = instance.getArenaPosition();
             placeCenteredPodium(world, arena);
             instance.arenaTentacleTargetCount = 6 + world.rand.nextInt(6);
             spawnArenaTentacles(world, instance, arena, instance.arenaTentacleTargetCount);
-            spawnArenaHeads(world, instance, instance.getStructureCenter(), Rotation.NONE);
+            spawnArenaHeads(world, instance);
             instance.prepared = true;
             data.markDirty();
         }
@@ -235,10 +245,8 @@ public final class BowelsManager {
 
     private static boolean ensureArenaHeads(WorldServer world, BowelsInstanceData.Instance instance) {
         boolean changed = false;
-        BlockPos structureCenter = instance.getStructureCenter();
-        BlockPos[] offsets = {new BlockPos(-2, 128, 27), new BlockPos(-3, 128, -23)};
-        for (int index = 0; index < offsets.length; index++) {
-            BlockPos position = structureCenter.add(offsets[index]);
+        for (int index = 0; index < HEAD_OFFSETS.length; index++) {
+            BlockPos position = getArenaHeadPosition(instance, index);
             SupplementalEntities.WitherStormHeadEntity head = resolveArenaHead(world,
                     instance.arenaHeadUuids[index], position);
             if (head == null && instance.bossPhase < 17) {
@@ -257,18 +265,29 @@ public final class BowelsManager {
         return changed;
     }
 
+    private static BlockPos getArenaHeadPosition(BowelsInstanceData.Instance instance, int index) {
+        BlockPos structureCenter = instance.getStructureCenter();
+        return new BlockPos(structureCenter.getX() + HEAD_OFFSETS[index].getX(),
+                instance.getArenaHeadY(), structureCenter.getZ() + HEAD_OFFSETS[index].getZ());
+    }
+
     private static SupplementalEntities.WitherStormHeadEntity resolveArenaHead(
             WorldServer world, UUID uuid, BlockPos expectedPosition) {
         Entity saved = uuid == null ? null : world.getEntityFromUuid(uuid);
         if (saved instanceof SupplementalEntities.WitherStormHeadEntity && !saved.isDead
                 && ((SupplementalEntities.WitherStormHeadEntity) saved).isIndependentBowelsPart()) {
-            return (SupplementalEntities.WitherStormHeadEntity) saved;
+            SupplementalEntities.WitherStormHeadEntity head =
+                    (SupplementalEntities.WitherStormHeadEntity) saved;
+            snapArenaHead(head, expectedPosition);
+            return head;
         }
         SupplementalEntities.WitherStormHeadEntity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
+        // 旧存档头部曾按锚点 88 + 128 生成，与新凹槽高度最多相差 12 格；
+        // 扩大搜索范围并只修复位置，避免再次生成重复头实体。
         for (SupplementalEntities.WitherStormHeadEntity candidate : world.getEntitiesWithinAABB(
                 SupplementalEntities.WitherStormHeadEntity.class,
-                new AxisAlignedBB(expectedPosition).grow(4.0D))) {
+                new AxisAlignedBB(expectedPosition).grow(16.0D))) {
             if (candidate.isDead || !candidate.isIndependentBowelsPart()) continue;
             double distance = candidate.getDistanceSqToCenter(expectedPosition);
             if (distance < nearestDistance) {
@@ -276,7 +295,24 @@ public final class BowelsManager {
                 nearest = candidate;
             }
         }
+        if (nearest != null) snapArenaHead(nearest, expectedPosition);
         return nearest;
+    }
+
+    /** 旧存档头部位置修复：与上游 EntityType.spawn(alignPosition=false) 一样，
+     * 实体水平中心精确落在方块角点，不再额外 +0.5。 */
+    private static void snapArenaHead(SupplementalEntities.WitherStormHeadEntity head,
+                                      BlockPos expectedPosition) {
+        double targetX = expectedPosition.getX();
+        double targetY = expectedPosition.getY();
+        double targetZ = expectedPosition.getZ();
+        if (Math.abs(head.posX - targetX) <= 1.0E-4D
+                && Math.abs(head.posY - targetY) <= 1.0E-4D
+                && Math.abs(head.posZ - targetZ) <= 1.0E-4D) return;
+        head.setPosition(targetX, targetY, targetZ);
+        head.prevPosX = targetX;
+        head.prevPosY = targetY;
+        head.prevPosZ = targetZ;
     }
 
     private static boolean ensureArenaTentacles(WorldServer world,
@@ -359,14 +395,10 @@ public final class BowelsManager {
         }
     }
 
-    private static void spawnArenaHeads(WorldServer world, BowelsInstanceData.Instance instance,
-                                        BlockPos structureCenter, Rotation rotation) {
-        BlockPos[] offsets = {new BlockPos(-2, 128, 27), new BlockPos(-3, 128, -23)};
-        BlockPos[] positions = {structureCenter.add(offsets[0].rotate(rotation)),
-                structureCenter.add(offsets[1].rotate(rotation))};
-        for (int index = 0; index < positions.length; index++) {
+    private static void spawnArenaHeads(WorldServer world, BowelsInstanceData.Instance instance) {
+        for (int index = 0; index < HEAD_OFFSETS.length; index++) {
             SupplementalEntities.WitherStormHeadEntity head = spawnArenaHead(
-                    world, positions[index], index, rotation);
+                    world, getArenaHeadPosition(instance, index), index, Rotation.NONE);
             if (head != null) instance.arenaHeadUuids[index] = head.getUniqueID();
         }
     }
@@ -375,7 +407,9 @@ public final class BowelsManager {
             WorldServer world, BlockPos position, int index, Rotation rotation) {
         SupplementalEntities.WitherStormHeadEntity head = new SupplementalEntities.WitherStormHeadEntity(world);
         head.setIndependentBowelsPart();
-        head.setPosition(position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D);
+        // 上游 EntityType.spawn(alignPosition=false) 把实体水平中心放在方块角点，
+        // 不额外 +0.5；凹槽按墙面几何贴合。
+        head.setPosition(position.getX(), position.getY(), position.getZ());
         head.onInitialSpawn(world.getDifficultyForLocation(position), null);
         head.rotationYaw = head.rotationYawHead = rotationYaw(rotation) + (index == 0 ? 180.0F : 0.0F);
         head.rotationPitch = 60.0F;

@@ -78,6 +78,7 @@ import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
 import net.minecraftforge.client.event.ModelBakeEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
@@ -94,6 +95,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
+import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -660,43 +662,114 @@ public final class WitherStormClientEvents {
         lastWorldEffectsEvent = event;
         Minecraft minecraft = Minecraft.getMinecraft();
         if (minecraft.world == null || minecraft.getRenderViewEntity() == null) return;
-        DistantStormRenderTracker.renderMissing(event.getPartialTicks());
-        double viewerX = minecraft.getRenderManager().viewerPosX;
-        double viewerY = minecraft.getRenderManager().viewerPosY;
-        double viewerZ = minecraft.getRenderManager().viewerPosZ;
-        // World.loadedEntityList can briefly contain the same tracked entity more than once
-        // while a split storm is reattached to a distant chunk. Render its world effects once.
-        List<WitherStormEntity> renderableStorms = new ArrayList<WitherStormEntity>();
-        Set<java.util.UUID> renderedStormIds = new HashSet<java.util.UUID>();
-        for (Entity entity : minecraft.world.loadedEntityList) {
-            if (entity instanceof WitherStormEntity && !entity.isDead
-                    && renderedStormIds.add(entity.getUniqueID())) {
-                renderableStorms.add((WitherStormEntity) entity);
+        // 原版 RenderWorldLastEvent 在 RenderHelper.disableStandardItemLighting() 之后发布，
+        // 之后唯一会触碰 GL 状态的只剩第一人称物品 pass。F1 或观察者模式会跳过物品
+        // 绘制，任何泄漏的光照/混合/alpha test 都会进入下一帧并使天空全黑。事件边界
+        // 保存并恢复完整 GL 状态，异常路径同样兜底，不再依赖手部渲染碰巧重置。
+        boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
+        boolean blendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        boolean alphaTestEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
+        boolean cullEnabled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        boolean depthMaskEnabled = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
+        boolean fogEnabled = GL11.glIsEnabled(GL11.GL_FOG);
+        int previousDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
+        int previousAlphaFunc = GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC);
+        float previousAlphaReference = GL11.glGetFloat(GL11.GL_ALPHA_TEST_REF);
+        int previousMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        float previousLightmapX = OpenGlHelper.lastBrightnessX;
+        float previousLightmapY = OpenGlHelper.lastBrightnessY;
+        GlStateManager.pushMatrix();
+        try {
+            DistantStormRenderTracker.renderMissing(event.getPartialTicks());
+            double viewerX = minecraft.getRenderManager().viewerPosX;
+            double viewerY = minecraft.getRenderManager().viewerPosY;
+            double viewerZ = minecraft.getRenderManager().viewerPosZ;
+            // World.loadedEntityList can briefly contain the same tracked entity more than once
+            // while a split storm is reattached to a distant chunk. Render its world effects once.
+            List<WitherStormEntity> renderableStorms = new ArrayList<WitherStormEntity>();
+            Set<java.util.UUID> renderedStormIds = new HashSet<java.util.UUID>();
+            for (Entity entity : minecraft.world.loadedEntityList) {
+                if (entity instanceof WitherStormEntity && !entity.isDead
+                        && renderedStormIds.add(entity.getUniqueID())) {
+                    renderableStorms.add((WitherStormEntity) entity);
+                }
             }
-        }
-        for (WitherStormEntity storm : renderableStorms) {
-            boolean extendedProjection = DistantProjection.shouldUse(storm);
-            if (extendedProjection) DistantProjection.push();
-            try {
-                WitherStormRenderer.renderDebrisRings(storm, event.getPartialTicks(),
-                        viewerX, viewerY, viewerZ);
-            } finally {
-                if (extendedProjection) DistantProjection.pop();
+            for (WitherStormEntity storm : renderableStorms) {
+                boolean extendedProjection = DistantProjection.shouldUse(storm);
+                if (extendedProjection) DistantProjection.push();
+                try {
+                    WitherStormRenderer.renderDebrisRings(storm, event.getPartialTicks(),
+                            viewerX, viewerY, viewerZ);
+                } finally {
+                    if (extendedProjection) DistantProjection.pop();
+                }
             }
-        }
-        TractorBeamRenderer.renderAll(minecraft.world.loadedEntityList,
-                event.getPartialTicks(), viewerX, viewerY, viewerZ);
-        for (WitherStormEntity storm : renderableStorms) {
-            boolean extendedProjection = DistantProjection.shouldUse(storm);
-            if (extendedProjection) DistantProjection.push();
-            try {
-                WitherStormRenderer.renderShine(storm, event.getPartialTicks(),
-                        viewerX, viewerY, viewerZ);
-            } finally {
-                if (extendedProjection) DistantProjection.pop();
+            TractorBeamRenderer.renderAll(minecraft.world.loadedEntityList,
+                    event.getPartialTicks(), viewerX, viewerY, viewerZ);
+            for (WitherStormEntity storm : renderableStorms) {
+                boolean extendedProjection = DistantProjection.shouldUse(storm);
+                if (extendedProjection) DistantProjection.push();
+                try {
+                    WitherStormRenderer.renderShine(storm, event.getPartialTicks(),
+                            viewerX, viewerY, viewerZ);
+                } finally {
+                    if (extendedProjection) DistantProjection.pop();
+                }
             }
+            PostProcessingShaders.INSTANCE.render(event.getPartialTicks());
+        } finally {
+            restoreWorldEffectsGlState(lightingEnabled, blendEnabled, alphaTestEnabled,
+                    cullEnabled, depthMaskEnabled, fogEnabled, previousDepthFunc,
+                    previousAlphaFunc, previousAlphaReference, previousMatrixMode,
+                    previousLightmapX, previousLightmapY);
         }
-        PostProcessingShaders.INSTANCE.render(event.getPartialTicks());
+    }
+
+    /** 把世界末尾特效批恢复为事件进入前的 GL 状态，保持 1.12 状态缓存与实际 GL 同步。 */
+    private static void restoreWorldEffectsGlState(boolean lightingEnabled, boolean blendEnabled,
+                                                   boolean alphaTestEnabled, boolean cullEnabled,
+                                                   boolean depthMaskEnabled, boolean fogEnabled,
+                                                   int previousDepthFunc, int previousAlphaFunc,
+                                                   float previousAlphaReference, int previousMatrixMode,
+                                                   float previousLightmapX, float previousLightmapY) {
+        GlStateManager.popMatrix();
+        GlStateManager.matrixMode(previousMatrixMode);
+        GlStateManager.depthMask(depthMaskEnabled);
+        GlStateManager.depthFunc(previousDepthFunc);
+        if (blendEnabled) {
+            GlStateManager.enableBlend();
+        } else {
+            GlStateManager.disableBlend();
+        }
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        if (alphaTestEnabled) {
+            GlStateManager.enableAlpha();
+        } else {
+            GlStateManager.disableAlpha();
+        }
+        GlStateManager.alphaFunc(previousAlphaFunc, previousAlphaReference);
+        if (cullEnabled) {
+            GlStateManager.enableCull();
+        } else {
+            GlStateManager.disableCull();
+        }
+        if (lightingEnabled) {
+            GlStateManager.enableLighting();
+        } else {
+            GlStateManager.disableLighting();
+        }
+        if (fogEnabled) {
+            GlStateManager.enableFog();
+        } else {
+            GlStateManager.disableFog();
+        }
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.disablePolygonOffset();
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                previousLightmapX, previousLightmapY);
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
     }
 
     private static void spawnFormidibombParticles(Minecraft minecraft) {

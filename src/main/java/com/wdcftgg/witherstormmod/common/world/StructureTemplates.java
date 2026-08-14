@@ -142,13 +142,16 @@ public final class StructureTemplates {
                 Math.max(first.getY(), last.getY()), Math.max(first.getZ(), last.getZ()));
     }
 
-    public static void placeBowelsNetwork(World world, BlockPos center, Random random) {
+    public static boolean placeBowelsNetwork(World world, BlockPos center, Random random) {
         List<AxisAlignedBB> occupied = new ArrayList<AxisAlignedBB>();
         WeightedTemplate start = choose(BOWELS_POOLS.get("witherstormmod:bowels/bowels_mains"), random);
-        if (start == null) return;
+        if (start == null) return false;
         TemplateData main = getData(start.id);
-        if (main == null) return;
-        BlockPos origin = center.add(-main.template.getSize().getX() / 2, -8, -main.template.getSize().getZ() / 2);
+        if (main == null) return false;
+        // 上游 BowelsStructure 把起始块的底部对齐 start_height=100（原点 Y=100）；
+        // 网络锚点 center 的 Y=96，因此垂直偏移为 +4。墙头凹槽、竞技场 Y=110 与
+        // 升台高度 115/120/125 全部以此为基准。
+        BlockPos origin = center.add(-main.template.getSize().getX() / 2, 4, -main.template.getSize().getZ() / 2);
         placePiece(world, main, origin, Rotation.NONE, occupied);
         List<PendingConnector> queue = new ArrayList<PendingConnector>();
         enqueue(queue, main, origin, Rotation.NONE, 0);
@@ -192,6 +195,7 @@ public final class StructureTemplates {
             }
         }
         WitherStormMod.LOGGER.info("Placed Bowels template network with {} pieces", placed);
+        return true;
     }
 
     private static TemplateData getData(String id) {

@@ -133,7 +133,8 @@ public final class PhasometerOverlay {
     public static void render(Minecraft minecraft, ScaledResolution resolution,
                               float partialTicks) {
         EntityPlayer player = minecraft.player;
-        if (!isFirstPersonScoping(minecraft)) return;
+        // F1 隐藏界面时与上游一样不绘制望远镜遮罩，避免遮罩状态影响世界渲染。
+        if (!isFirstPersonScoping(minecraft) || minecraft.gameSettings.hideGUI) return;
 
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
