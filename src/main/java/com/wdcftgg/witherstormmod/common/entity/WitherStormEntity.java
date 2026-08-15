@@ -76,6 +76,7 @@ import net.minecraft.util.Rotation;
 import net.minecraft.world.gen.structure.template.PlacementSettings;
 import net.minecraft.world.gen.structure.template.Template;
 import com.wdcftgg.witherstormmod.common.world.StructureTemplates;
+import com.wdcftgg.witherstormmod.common.world.BowelsBossfightController;
 import com.wdcftgg.witherstormmod.common.world.BowelsManager;
 import com.wdcftgg.witherstormmod.common.world.BowelsDimensions;
 import com.wdcftgg.witherstormmod.common.world.BowelsInstanceData;
@@ -259,6 +260,7 @@ public class WitherStormEntity extends EntityMob
     private float shineScale;
     private boolean shouldFlicker;
     private boolean soundLoopActive;
+    private boolean completedBowelsDeathChecked;
     public boolean shouldPlaySoundLoop = true;
     public boolean shouldPlayGlobalSounds = true;
 
@@ -354,6 +356,10 @@ public class WitherStormEntity extends EntityMob
 
     @Override
     public void onLivingUpdate() {
+        if (!world.isRemote && !completedBowelsDeathChecked && getPhase() >= 7) {
+            completedBowelsDeathChecked = true;
+            if (BowelsBossfightController.reconcileCompletedDeath(this)) return;
+        }
         tickFlicker();
         if (!world.isRemote) {
             resolveSavedTrackedEntities();
@@ -3481,7 +3487,24 @@ public class WitherStormEntity extends EntityMob
                 : killer instanceof EntityLivingBase
                 ? ModDamageSources.mobAttackWitherStorm((EntityLivingBase) killer)
                 : DamageSource.OUT_OF_WORLD;
+        // The upstream final phase deals Float.MAX_VALUE through its dedicated
+        // damage type. Clear 1.12's generic hurt window before doing the same so
+        // an earlier maximum-damage attempt cannot reject the terminal hit.
+        hurtResistantTime = 0;
         attackEntityFrom(source, Float.MAX_VALUE);
+        if (getHealth() <= 0.0F || isDead) return;
+
+        // A completed bowels fight is authoritative. Some 1.12 compatibility
+        // handlers can consume the attack before EntityLivingBase reaches
+        // damageEntity; start the normal death sequence with the same source.
+        WitherStormMod.LOGGER.warn("Bowels fight completed for storm {} but the terminal damage was rejected; "
+                + "starting the death sequence directly", getUniqueID());
+        if (killer instanceof EntityPlayer) {
+            attackingPlayer = (EntityPlayer) killer;
+            recentlyHit = 100;
+        }
+        setHealth(0.0F);
+        onDeath(source);
     }
 
     private void releaseFinalDeathLoot() {

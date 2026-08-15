@@ -42,14 +42,13 @@ public abstract class EntityRendererFogMixin {
 
     /**
      * Keep terrain/entity visibility on the normal field of view, then switch only the
-     * rendered projection to the phasometer zoom. Cleanroom samples its clipping helper
-     * immediately before this point; changing Forge's global FOV event made that helper
-     * discard the world and left only the GUI visible.
+     * rendered projection to the phasometer zoom. Frustum's default constructor performs
+     * a second clipping-helper sample, so the switch must happen after construction.
      */
     @Inject(method = "renderWorldPass(IFJ)V",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;",
-                    shift = At.Shift.AFTER))
+                    target = "Lnet/minecraft/client/renderer/culling/ICamera;setPosition(DDD)V",
+                    shift = At.Shift.BEFORE))
     private void witherstormmod$applyPhasometerProjectionAfterCulling(
             int pass, float partialTicks, long finishTimeNano, CallbackInfo callback) {
         witherstormmod$scopeFovScale = PhasometerOverlay.getFovScale(partialTicks);

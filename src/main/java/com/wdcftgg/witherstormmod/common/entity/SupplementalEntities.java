@@ -18,6 +18,7 @@ import net.minecraft.entity.ai.EntityAIBase;
 import net.minecraft.entity.ai.EntityAIHurtByTarget;
 import net.minecraft.entity.ai.EntityAINearestAttackableTarget;
 import net.minecraft.entity.ai.EntityAIWatchClosest;
+import net.minecraft.entity.ai.EntityLookHelper;
 import net.minecraft.entity.item.EntityBoat;
 import net.minecraft.entity.item.EntityFireworkRocket;
 import net.minecraft.entity.item.EntityItem;
@@ -56,6 +57,7 @@ import net.minecraft.world.BossInfo;
 import net.minecraft.world.BossInfoServer;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.potion.PotionEffect;
+import net.minecraft.pathfinding.PathNavigateGround;
 import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModItems;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
@@ -2441,7 +2443,14 @@ public final class SupplementalEntities {
         public WitherStormHeadEntity(World world) {
             super(world);
             forceSpawn = true;
+            ignoreFrustumCheck = true;
+            isImmuneToFire = true;
             setSize(5.0F, 5.0F);
+            if (getNavigator() instanceof PathNavigateGround) {
+                ((PathNavigateGround) getNavigator()).setCanSwim(true);
+            }
+            nextRoar = WitherStormPartLogic.initialRoarDelay(rand);
+            this.lookHelper = new WitherStormHeadLookHelper(this);
         }
 
         @Override
@@ -2454,7 +2463,9 @@ public final class SupplementalEntities {
         }
         @Override protected double getSickenedHealth() { return 60.0D; }
         @Override protected double getSickenedSpeed() { return 0.0D; }
-        @Override protected double getSickenedDamage() { return 3.5D; }
+        // Monster.createMonsterAttributes leaves attack damage at the vanilla 2.0;
+        // the head's 3.5 bite is dealt explicitly in customServerAiStep.
+        @Override protected double getSickenedDamage() { return 2.0D; }
         @Override protected double getSickenedFollowRange() { return 40.0D; }
         @Override protected double getSickenedArmor() { return 8.0D; }
         @Override protected double getSickenedKnockbackResistance() { return 0.0D; }
@@ -2524,7 +2535,7 @@ public final class SupplementalEntities {
             previousShakeAnimation = shakeAnimation;
             if (shaking) {
                 shakeAnimation = WitherStormPartLogic.advanceShake(shakeAnimation, true, rand);
-                if (shakeAnimation >= 2.0F) {
+                if (previousShakeAnimation >= 2.0F) {
                     shakeAnimation = previousShakeAnimation = 0.0F;
                     shaking = false;
                 }
@@ -2532,7 +2543,6 @@ public final class SupplementalEntities {
 
             if (!isIndependentBowelsPart() || world.isRemote) return;
             copyPlayingJukeboxesFromOwner();
-            if (nextRoar <= 0) nextRoar = WitherStormPartLogic.initialRoarDelay(rand);
             if (distractedTime > 0 && --distractedTime == 0) distractedPos = null;
             if (!isDeadOrPlayingDead()) {
                 if (--nextRoar == 0) {
@@ -2550,8 +2560,9 @@ public final class SupplementalEntities {
                     --shootTime;
                     if (shootTime < 60 && getAttackTarget() != null) {
                         EntityLivingBase target = getAttackTarget();
-                        getLookHelper().setLookPosition(target.posX, target.posY + target.getEyeHeight(), target.posZ,
-                                10.0F, 10.0F);
+                        // Upstream hurt-fire aiming intentionally targets Entity.position(),
+                        // while the normal look goal targets the victim's eyes.
+                        setLookAt(0, target.getPositionVector(), 3);
                         shaking = false;
                     }
                     if (shootTime == 0) {
@@ -2560,10 +2571,6 @@ public final class SupplementalEntities {
                         shaking = false;
                     }
                 }
-            } else {
-                setAttackTarget(null);
-                getNavigator().clearPath();
-                motionX = motionY = motionZ = 0.0D;
             }
         }
 
@@ -2579,10 +2586,6 @@ public final class SupplementalEntities {
         public boolean isActive() { return dataManager.get(ACTIVE); }
         public void setActive(boolean active) {
             dataManager.set(ACTIVE, active);
-            if (!active) {
-                setAttackTarget(null);
-                getNavigator().clearPath();
-            }
         }
         public boolean isRoaring() { return dataManager.get(ROARING); }
         /** Starts a roar; screaming=true selects the hurt roar variant. */
@@ -2618,6 +2621,12 @@ public final class SupplementalEntities {
         @Override
         public boolean canBeAttackedWithItem() {
             return !isPlayingDead();
+        }
+
+        /** LivingEntity is pickable upstream; StormPartBase disables it for attached parts. */
+        @Override
+        public boolean canBeCollidedWith() {
+            return true;
         }
 
         @Override
@@ -2765,7 +2774,12 @@ public final class SupplementalEntities {
                     -MathHelper.sin(pitch), MathHelper.cos(yaw) * horizontal).normalize();
         }
         public void setLookAt(int head, Vec3d pos, int steps) {
-            if (pos != null) getLookHelper().setLookPosition(pos.x, pos.y, pos.z, 10.0F, 10.0F);
+            if (pos != null) {
+                // WitherStormHeadEntity delegates to LookControl#setLookAt(Vec3):
+                // 10 degrees/tick horizontally and 40 degrees/tick vertically.
+                // The API's steps value is deliberately ignored upstream.
+                getLookHelper().setLookPosition(pos.x, pos.y, pos.z, 10.0F, 40.0F);
+            }
         }
 
         @Override
@@ -2806,6 +2820,95 @@ public final class SupplementalEntities {
             if (specialDeathTime > 120) setDead();
         }
 
+        /** 1.12 equivalent of the upstream ConditionalLookController(resetXRot=false). */
+        private static final class WitherStormHeadLookHelper extends EntityLookHelper {
+            private static final double ROTATION_EPSILON = 1.0E-5D;
+            private static final float IDLE_YAW_SPEED = 10.0F;
+            private static final float NAVIGATING_YAW_LIMIT = 75.0F;
+
+            private final WitherStormHeadEntity head;
+            private float maximumYawChange;
+            private float maximumPitchChange;
+            private int lookAtTicks;
+            private double targetX;
+            private double targetY;
+            private double targetZ;
+
+            WitherStormHeadLookHelper(WitherStormHeadEntity head) {
+                super(head);
+                this.head = head;
+            }
+
+            @Override
+            public void setLookPositionWithEntity(Entity target, float deltaYaw, float deltaPitch) {
+                double y = target instanceof EntityLivingBase
+                        ? target.posY + target.getEyeHeight()
+                        : (target.getEntityBoundingBox().minY + target.getEntityBoundingBox().maxY) * 0.5D;
+                setLookPosition(target.posX, y, target.posZ, deltaYaw, deltaPitch);
+            }
+
+            @Override
+            public void setLookPosition(double x, double y, double z, float deltaYaw, float deltaPitch) {
+                targetX = x;
+                targetY = y;
+                targetZ = z;
+                maximumYawChange = deltaYaw;
+                maximumPitchChange = deltaPitch;
+                lookAtTicks = 2;
+            }
+
+            @Override
+            public void onUpdateLook() {
+                // Do not reset rotationPitch here. Upstream's predicate is always
+                // false so an idle wall head keeps its spawn/death pitch.
+                if (lookAtTicks > 0) {
+                    --lookAtTicks;
+                    double x = targetX - head.posX;
+                    double y = targetY - (head.posY + head.getEyeHeight());
+                    double z = targetZ - head.posZ;
+                    double horizontal = Math.sqrt(x * x + z * z);
+                    if (Math.abs(z) > ROTATION_EPSILON || Math.abs(x) > ROTATION_EPSILON) {
+                        float yaw = (float) (MathHelper.atan2(z, x) * 57.2957763671875D) - 90.0F;
+                        head.rotationYawHead = rotateTowards(
+                                head.rotationYawHead, yaw, maximumYawChange);
+                    }
+                    if (Math.abs(y) > ROTATION_EPSILON || Math.abs(horizontal) > ROTATION_EPSILON) {
+                        float pitch = (float) (-(MathHelper.atan2(y, horizontal)
+                                * 57.2957763671875D));
+                        head.rotationPitch = rotateTowards(
+                                head.rotationPitch, pitch, maximumPitchChange);
+                    }
+                } else {
+                    head.rotationYawHead = rotateTowards(
+                            head.rotationYawHead, head.renderYawOffset, IDLE_YAW_SPEED);
+                }
+
+                // Vanilla 1.20 only applies its 75-degree body-relative clamp
+                // while navigation has an active path. This immobile head normally
+                // has no path and therefore has a full horizontal turn range.
+                if (!head.getNavigator().noPath()) {
+                    float relativeYaw = MathHelper.wrapDegrees(
+                            head.rotationYawHead - head.renderYawOffset);
+                    if (relativeYaw < -NAVIGATING_YAW_LIMIT) {
+                        head.rotationYawHead = head.renderYawOffset - NAVIGATING_YAW_LIMIT;
+                    } else if (relativeYaw > NAVIGATING_YAW_LIMIT) {
+                        head.rotationYawHead = head.renderYawOffset + NAVIGATING_YAW_LIMIT;
+                    }
+                }
+            }
+
+            @Override public boolean getIsLooking() { return lookAtTicks > 0; }
+            @Override public double getLookPosX() { return targetX; }
+            @Override public double getLookPosY() { return targetY; }
+            @Override public double getLookPosZ() { return targetZ; }
+
+            private static float rotateTowards(float current, float target, float maximumChange) {
+                float difference = MathHelper.wrapDegrees(target - current);
+                difference = MathHelper.clamp(difference, -maximumChange, maximumChange);
+                return current + difference;
+            }
+        }
+
         private static class DoNothingGoal extends EntityAIBase {
             private final WitherStormHeadEntity head;
 
@@ -2830,13 +2933,12 @@ public final class SupplementalEntities {
             @Override
             public boolean shouldExecute() {
                 targetPosition = head.distractedPos;
-                return targetPosition != null && head.isActive() && !head.isHurt();
+                return targetPosition != null;
             }
 
             @Override
             public boolean shouldContinueExecuting() {
-                targetPosition = head.distractedPos;
-                return targetPosition != null && head.isActive() && !head.isHurt();
+                return shouldExecute();
             }
 
             @Override
@@ -2863,16 +2965,14 @@ public final class SupplementalEntities {
             @Override
             public boolean shouldExecute() {
                 EntityLivingBase currentTarget = head.getAttackTarget();
-                if (!head.isActive() || head.isHurt()
-                        || currentTarget == null || !currentTarget.isEntityAlive()) return false;
+                if (currentTarget == null || !currentTarget.isEntityAlive()) return false;
                 target = currentTarget;
                 return true;
             }
 
             @Override
             public boolean shouldContinueExecuting() {
-                return target != null && target.isEntityAlive()
-                        && head.getAttackTarget() == target && head.isActive() && !head.isHurt();
+                return shouldExecute();
             }
 
             @Override
@@ -3013,13 +3113,13 @@ public final class SupplementalEntities {
                 lookX = head.posX + Math.cos(yawRadians) * 30.0D;
                 lookY = head.posY + head.getEyeHeight() + Math.sin(pitchRadians) * 30.0D;
                 lookZ = head.posZ + Math.sin(yawRadians) * 30.0D;
-                lookTime = 20 + head.getRNG().nextInt(20) + head.getRNG().nextInt(20);
+                lookTime = 20 + head.getRNG().nextInt(20);
             }
 
             @Override
             public void updateTask() {
                 --lookTime;
-                head.getLookHelper().setLookPosition(lookX, lookY, lookZ, 10.0F, 10.0F);
+                head.setLookAt(0, new Vec3d(lookX, lookY, lookZ), 3);
             }
         }
 
@@ -3062,7 +3162,7 @@ public final class SupplementalEntities {
             roarTime = Math.max(0, compound.getInteger("RoarTime"));
             dataManager.set(BITING, false);
             biteTime = 0;
-            nextRoar = 0;
+            nextRoar = WitherStormPartLogic.initialRoarDelay(rand);
             shootTime = 100;
             setHurt(compound.hasKey("IsHurt", 1) ? compound.getBoolean("IsHurt")
                     : compound.hasKey("Hurt") ? compound.getBoolean("Hurt")

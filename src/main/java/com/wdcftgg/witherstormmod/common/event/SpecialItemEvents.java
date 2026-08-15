@@ -5,9 +5,12 @@ import com.wdcftgg.witherstormmod.common.init.ModBlocks;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
+import com.wdcftgg.witherstormmod.common.item.AmuletItem;
 import com.wdcftgg.witherstormmod.common.item.FormidiBladeItem;
+import com.wdcftgg.witherstormmod.common.item.GoldenAppleStewItem;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
@@ -23,6 +26,7 @@ import net.minecraft.util.SoundCategory;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
+import net.minecraftforge.event.ForgeEventFactory;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
@@ -30,6 +34,33 @@ import net.minecraftforge.fml.common.eventhandler.EventPriority;
 @Mod.EventBusSubscriber(modid = Tags.MOD_ID)
 public final class SpecialItemEvents {
     private SpecialItemEvents() { }
+
+    /**
+     * Forge fires this before EntityLiving.processInitialInteract. The upstream items must get
+     * first refusal so trading, mounting, leashing, and similar mob actions cannot consume the
+     * click before their entity interaction runs.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void useImportantItemOnMob(PlayerInteractEvent.EntityInteract event) {
+        if (!(event.getTarget() instanceof EntityLiving)) return;
+        ItemStack stack = event.getItemStack();
+        if (!(stack.getItem() instanceof AmuletItem)
+                && !(stack.getItem() instanceof GoldenAppleStewItem)) return;
+
+        EntityPlayer player = event.getEntityPlayer();
+        ItemStack original = stack.copy();
+        if (!stack.interactWithEntity(player, (EntityLiving) event.getTarget(), event.getHand())) {
+            return;
+        }
+        if (player.capabilities.isCreativeMode && stack == player.getHeldItem(event.getHand())
+                && stack.getCount() < original.getCount()) {
+            stack.setCount(original.getCount());
+        } else if (!player.capabilities.isCreativeMode && stack.isEmpty()) {
+            ForgeEventFactory.onPlayerDestroyItem(player, original, event.getHand());
+        }
+        event.setCancellationResult(EnumActionResult.SUCCESS);
+        event.setCanceled(true);
+    }
 
     /**
      * 1.12 的玩家实体攻击包与 1.20 的 LivingEntity#hurt 入口并不完全相同。

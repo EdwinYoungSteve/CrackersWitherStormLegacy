@@ -6,7 +6,6 @@ import com.wdcftgg.witherstormmod.api.common.ai.symbiont.SymbiontSpell;
 import com.wdcftgg.witherstormmod.api.common.registry.WitherStormModRegistries;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
-import com.wdcftgg.witherstormmod.mixin.EntityShulkerBulletAccessor;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
@@ -732,7 +731,7 @@ public final class SymbiontSpells {
             for (int index = 0; index < amount; index++) {
                 float angle = (float) (Math.PI * 2.0D / amount) * index;
                 EntityShulkerBullet bullet = new EntityShulkerBullet(entity.world);
-                ((EntityShulkerBulletAccessor) bullet).witherstormmod$setOwner(entity);
+                bullet.owner = entity;
                 bullet.setPosition(5.0D * MathHelper.sin(angle) + entity.posX, entity.posY,
                         5.0D * MathHelper.cos(angle) + entity.posZ);
                 bullet.setNoGravity(true);
@@ -775,10 +774,10 @@ public final class SymbiontSpells {
             for (Entity projectile : projectiles) {
                 if (!(projectile instanceof EntityShulkerBullet) || projectile.isDead) continue;
                 EntityLivingBase chosen = randomPlayerOrFallback(target);
-                EntityShulkerBulletAccessor bullet = (EntityShulkerBulletAccessor) projectile;
-                bullet.witherstormmod$setTarget(chosen);
-                bullet.witherstormmod$setDirection(EnumFacing.UP);
-                bullet.witherstormmod$selectNextMoveDirection(EnumFacing.Axis.Y);
+                EntityShulkerBullet bullet = (EntityShulkerBullet) projectile;
+                bullet.target = chosen;
+                bullet.direction = EnumFacing.UP;
+                bullet.selectNextMoveDirection(EnumFacing.Axis.Y);
                 projectile.setNoGravity(false);
             }
             projectiles.clear();

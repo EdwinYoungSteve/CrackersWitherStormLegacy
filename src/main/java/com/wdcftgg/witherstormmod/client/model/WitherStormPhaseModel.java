@@ -189,6 +189,7 @@ public class WitherStormPhaseModel extends ModelBase {
         boolean textureEnabled = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
         boolean lightingEnabled = GL11.glIsEnabled(GL11.GL_LIGHTING);
         boolean blendEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        boolean cullEnabled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         GlStateManager.pushMatrix();
         try {
             applyMirroredTransform(storm);
@@ -207,6 +208,9 @@ public class WitherStormPhaseModel extends ModelBase {
             GlStateManager.disableTexture2D();
             GlStateManager.disableLighting();
             GlStateManager.enableBlend();
+            // RenderType.lightning() enables face culling. RenderLivingBase disables it while
+            // rendering models, which otherwise draws both coplanar windings additively.
+            GlStateManager.enableCull();
             GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
                     GlStateManager.DestFactor.ONE, GlStateManager.SourceFactor.ONE,
                     GlStateManager.DestFactor.ZERO);
@@ -233,6 +237,7 @@ public class WitherStormPhaseModel extends ModelBase {
             GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
                     GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             if (!blendEnabled) GlStateManager.disableBlend();
+            if (!cullEnabled) GlStateManager.disableCull();
             if (lightingEnabled) GlStateManager.enableLighting();
             if (textureEnabled) GlStateManager.enableTexture2D();
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);

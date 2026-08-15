@@ -4,7 +4,6 @@ import com.wdcftgg.witherstormmod.client.WitherStormClientConfig;
 import com.wdcftgg.witherstormmod.common.entity.BossThemeProvider;
 import com.wdcftgg.witherstormmod.common.entity.SickenedEntities;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
-import com.wdcftgg.witherstormmod.mixin.client.MusicTickerAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.MusicTicker;
@@ -33,7 +32,7 @@ public final class BossThemeManager {
         if (!WitherStormClientConfig.playMinecraftMusic) {
             suppressMinecraftMusic(minecraft);
         } else if (minecraftMusicSuppressed) {
-            ((MusicTickerAccessor) minecraft.getMusicTicker()).witherstormmod$setTimeUntilNextMusic(0);
+            minecraft.getMusicTicker().timeUntilNextMusic = 0;
             minecraftMusicSuppressed = false;
         }
         if (minecraft.world == null || minecraft.player == null) return;
@@ -125,11 +124,10 @@ public final class BossThemeManager {
 
     private void suppressMinecraftMusic(Minecraft minecraft) {
         MusicTicker ticker = minecraft.getMusicTicker();
-        MusicTickerAccessor accessor = (MusicTickerAccessor) ticker;
-        ISound currentMusic = accessor.witherstormmod$getCurrentMusic();
+        ISound currentMusic = ticker.currentMusic;
         if (currentMusic != null) minecraft.getSoundHandler().stopSound(currentMusic);
-        accessor.witherstormmod$setCurrentMusic(null);
-        accessor.witherstormmod$setTimeUntilNextMusic(Integer.MAX_VALUE);
+        ticker.currentMusic = null;
+        ticker.timeUntilNextMusic = Integer.MAX_VALUE;
         minecraftMusicSuppressed = true;
     }
 

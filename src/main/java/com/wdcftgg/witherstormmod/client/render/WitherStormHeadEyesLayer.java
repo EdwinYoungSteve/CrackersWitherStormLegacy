@@ -30,23 +30,30 @@ public final class WitherStormHeadEyesLayer implements LayerRenderer<Supplementa
         float previousBrightnessX = OpenGlHelper.lastBrightnessX;
         float previousBrightnessY = OpenGlHelper.lastBrightnessY;
         int previousDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
+        boolean previousLighting = GL11.glIsEnabled(GL11.GL_LIGHTING);
         if (additive) {
-            // 上游 RenderType.eyes：additive 叠加、只写颜色、双面且深度测试为 EQUAL，
-            // 眼睛像素严格贴在主模型已写入深度的表面，不会浮在模型前后。
+            // RenderType.eyes does not override the default LEQUAL depth test.
+            // EQUAL drops coplanar fragments after 1.12's fixed-pipeline transforms,
+            // which made the eyes disappear and left only fragments of the teeth.
             GlStateManager.enableBlend();
             GlStateManager.disableAlpha();
             GlStateManager.disableCull();
+            GlStateManager.disableLighting();
             GlStateManager.blendFunc(GlStateManager.SourceFactor.ONE,
                     GlStateManager.DestFactor.ONE);
             GlStateManager.depthMask(false);
-            GlStateManager.depthFunc(GL11.GL_EQUAL);
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
         } else {
             GlStateManager.disableBlend();
             GlStateManager.enableAlpha();
             GlStateManager.enableCull();
             GlStateManager.depthMask(true);
         }
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 61680.0F, 0.0F);
+        // RenderType.eyes ignores the lightmap in 1.20.  The 1.12 fixed pipeline
+        // still multiplies by it, so active eyes need full block and sky light.
+        // The inactive entity-cutout branch keeps upstream packed light 0xF00000.
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                additive ? 240.0F : 0.0F, 240.0F);
         try {
             WitherStormHeadModel model = (WitherStormHeadModel) renderer.getMainModel();
             model.setModelAttributes(renderer.getMainModel());
@@ -62,6 +69,8 @@ public final class WitherStormHeadEyesLayer implements LayerRenderer<Supplementa
             GlStateManager.disableBlend();
             GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
                     GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            if (previousLighting) GlStateManager.enableLighting();
+            else GlStateManager.disableLighting();
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }

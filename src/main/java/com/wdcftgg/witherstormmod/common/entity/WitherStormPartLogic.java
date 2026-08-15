@@ -40,10 +40,8 @@ public final class WitherStormPartLogic {
     }
 
     public static int applyFadeLight(int packedLight, float fadeAnimation) {
-        int minimumBlockLight = Math.max(0, (int) ((100.0F - fadeAnimation) / 4.0F - 10.0F));
-        int currentBlockLight = packedLight & 0xFFFF;
-        int adjustedBlockLight = Math.max(currentBlockLight, minimumBlockLight << 4);
-        return packedLight & 0xFFFF0000 | adjustedBlockLight;
+        int blockLight = Math.max(0, (int) ((100.0F - fadeAnimation) / 4.0F - 10.0F));
+        return packedLight & 0xFFFF0000 | blockLight << 4;
     }
 
     public static float advanceShake(float current, boolean shaking, Random random) {

@@ -253,6 +253,7 @@ public final class BowelsManager {
                 head = spawnArenaHead(world, position, index, Rotation.NONE);
                 if (head != null) changed = true;
             }
+            if (head != null) repairArenaHeadOrientation(head, index, Rotation.NONE);
             UUID resolved = head == null ? null : head.getUniqueID();
             if (resolved != null && !resolved.equals(instance.arenaHeadUuids[index])) {
                 instance.arenaHeadUuids[index] = resolved;
@@ -313,6 +314,18 @@ public final class BowelsManager {
         head.prevPosX = targetX;
         head.prevPosY = targetY;
         head.prevPosZ = targetZ;
+    }
+
+    /** Restores the fixed body anchor established by upstream spawnHeads(). */
+    private static void repairArenaHeadOrientation(
+            SupplementalEntities.WitherStormHeadEntity head, int index, Rotation rotation) {
+        float bodyYaw = rotationYaw(rotation) + (index == 0 ? 180.0F : 0.0F);
+        head.rotationYaw = head.prevRotationYaw = bodyYaw;
+        head.renderYawOffset = head.prevRenderYawOffset = bodyYaw;
+        if (!head.isActive()) {
+            head.rotationYawHead = head.prevRotationYawHead = bodyYaw;
+            head.rotationPitch = head.prevRotationPitch = 60.0F;
+        }
     }
 
     private static boolean ensureArenaTentacles(WorldServer world,
@@ -411,9 +424,8 @@ public final class BowelsManager {
         // 不额外 +0.5；凹槽按墙面几何贴合。
         head.setPosition(position.getX(), position.getY(), position.getZ());
         head.onInitialSpawn(world.getDifficultyForLocation(position), null);
-        head.rotationYaw = head.rotationYawHead = rotationYaw(rotation) + (index == 0 ? 180.0F : 0.0F);
-        head.rotationPitch = 60.0F;
         head.setActive(false);
+        repairArenaHeadOrientation(head, index, rotation);
         return world.spawnEntity(head) ? head : null;
     }
 

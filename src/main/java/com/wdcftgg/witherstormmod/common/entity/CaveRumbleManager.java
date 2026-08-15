@@ -5,7 +5,6 @@ import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
 import com.wdcftgg.witherstormmod.common.util.WorldUtil;
-import com.wdcftgg.witherstormmod.mixin.BlockFallingMixin;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockButton;
 import net.minecraft.block.BlockFalling;
@@ -91,7 +90,7 @@ public final class CaveRumbleManager {
         EntityFallingBlock fallingBlock = new EntityFallingBlock(world,
                 ceilingPosition.getX() + 0.5D, ceilingPosition.getY(),
                 ceilingPosition.getZ() + 0.5D, state);
-        ((BlockFallingMixin) state.getBlock()).witherstormmod$invokeOnStartFalling(fallingBlock);
+        ((BlockFalling) state.getBlock()).onStartFalling(fallingBlock);
         world.spawnEntity(fallingBlock);
     }
 

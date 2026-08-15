@@ -1,7 +1,6 @@
 package com.wdcftgg.witherstormmod.common.resource;
 
 import com.wdcftgg.witherstormmod.WitherStormMod;
-import com.wdcftgg.witherstormmod.mixin.client.MinecraftAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.IResourcePack;
 
@@ -24,8 +23,7 @@ public final class UpstreamResourcePackInstaller {
     }
 
     private static void addDefaultResourcePack(Minecraft minecraft, File file) {
-        List<IResourcePack> defaultPacks =
-                ((MinecraftAccessor) (Object) minecraft).witherstormmod$getDefaultResourcePacks();
+        List<IResourcePack> defaultPacks = minecraft.defaultResourcePacks;
         String expectedName = file.getName();
         defaultPacks.removeIf(pack -> expectedName.equals(pack.getPackName()));
         // 原版 1.20 资源包只提供媒体资源，端口内置的 1.12 兼容定义必须保持更高优先级。

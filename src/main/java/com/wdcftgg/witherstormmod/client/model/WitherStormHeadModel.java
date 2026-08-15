@@ -1,6 +1,7 @@
 package com.wdcftgg.witherstormmod.client.model;
 
 import com.wdcftgg.witherstormmod.client.model.witherstorm.ModelBuilders;
+import com.wdcftgg.witherstormmod.common.entity.SupplementalEntities;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.renderer.GlStateManager;
@@ -8,6 +9,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 
 public class WitherStormHeadModel extends ModelBase {
+    private static final float DEGREES_TO_RADIANS = (float) (Math.PI / 180.0D);
+
     private final ModelRenderer head;
     private final ModelRenderer upperJaw;
     private final ModelRenderer lowerJaw;
@@ -66,22 +69,19 @@ public class WitherStormHeadModel extends ModelBase {
         // 抬高约 6 格；若不用 push/pop，矩阵残留会让发光眼层再放大 3 倍并过曝。
         GlStateManager.pushMatrix();
         GlStateManager.scale(3.0F, 3.0F, 3.0F);
-        head.rotateAngleY = (180.0F + yaw) * 0.017453292F;
-        head.rotateAngleX = -pitch * 0.017453292F;
+        // HeadModel uses the literal 3.1416F rather than a converted 180 degrees.
+        head.rotateAngleY = 3.1416F + yaw * DEGREES_TO_RADIANS;
+        head.rotateAngleX = -pitch * DEGREES_TO_RADIANS;
         head.rotateAngleZ = 0.0F;
         float partialTicks = MathHelper.clamp(age - entity.ticksExisted, 0.0F, 1.0F);
-        if (entity instanceof com.wdcftgg.witherstormmod.common.entity.SupplementalEntities.WitherStormHeadEntity) {
-            com.wdcftgg.witherstormmod.common.entity.SupplementalEntities.WitherStormHeadEntity stormHead =
-                    (com.wdcftgg.witherstormmod.common.entity.SupplementalEntities.WitherStormHeadEntity) entity;
-            float ticks = stormHead.isDeadOrPlayingDead() ? 0.0F : age;
-            lowerJaw.rotateAngleX = WitherStormHeadAnimation.jawPitch(
-                    stormHead.getMouthAnimation(partialTicks), ticks, 0.0F);
-            lowerJaw.rotateAngleZ = WitherStormHeadAnimation.brokenJawRoll(stormHead, 0,
-                    stormHead.getBrokenJawAnimation(0, partialTicks));
-            head.rotateAngleZ = stormHead.getHeadShakeAnimation(partialTicks);
-        } else {
-            lowerJaw.rotateAngleX = 0.2F + (MathHelper.sin(age * 0.12F) + 1.0F) * 0.18F;
-        }
+        SupplementalEntities.WitherStormHeadEntity stormHead =
+                (SupplementalEntities.WitherStormHeadEntity) entity;
+        float ticks = stormHead.isDeadOrPlayingDead() ? 0.0F : age;
+        lowerJaw.rotateAngleX = WitherStormHeadAnimation.jawPitch(
+                stormHead.getMouthAnimation(partialTicks), ticks, 0.0F);
+        lowerJaw.rotateAngleZ = WitherStormHeadAnimation.brokenJawRoll(stormHead, 0,
+                stormHead.getBrokenJawAnimation(0, partialTicks));
+        head.rotateAngleZ = stormHead.getHeadShakeAnimation(partialTicks);
         head.render(scale);
         GlStateManager.popMatrix();
     }

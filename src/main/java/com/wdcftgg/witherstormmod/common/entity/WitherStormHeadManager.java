@@ -40,7 +40,7 @@ import java.util.Random;
  */
 public final class WitherStormHeadManager {
     private static final int ENTITY_DISTRACTION_UNSEEN_LIMIT = 180;
-    private static final float MAXIMUM_LATE_HEAD_YAW = 80.0F;
+    private static final float MAXIMUM_HEAD_YAW = 80.0F;
     private static final double[][][] OFFSETS = {
             {{0, 3, 0}, {-1.3, 2.2, 0}, {1.3, 2.2, 0}},
             {{0, 3, 0}, {-1.3, 2.2, 0}, {1.3, 2.2, 0}},
@@ -79,7 +79,7 @@ public final class WitherStormHeadManager {
                 head.pitch = storm.getSyncedHeadPitch(index);
             } else {
                 updateLook(index, head);
-                constrainLateHeadYaw(head);
+                constrainHeadYaw(index, head);
                 storm.updateHeadRotation(index, head.yaw, head.pitch);
             }
             updateBeamCutoff(index, head);
@@ -613,15 +613,15 @@ public final class WitherStormHeadManager {
     }
 
     /**
-     * Late-phase look goals only accept positions in the same +/-80 degree
-     * forward arc. Keep stale/synced look targets inside that upstream arc as
-     * well so no head can rotate through the mass while changing targets.
+     * Additional heads always stay inside the upstream +/-80 degree forward
+     * arc. Late phases apply the same arc to every head so stale/synced look
+     * targets cannot rotate a head through the mass while changing targets.
      */
-    private void constrainLateHeadYaw(HeadState head) {
-        if (storm.getPhase() <= 3 || storm.isDeadOrPlayingDead()) return;
+    private void constrainHeadYaw(int index, HeadState head) {
+        if (storm.isDeadOrPlayingDead() || (storm.getPhase() <= 3 && index == 0)) return;
         float relativeYaw = MathHelper.wrapDegrees(head.yaw - storm.renderYawOffset);
         head.yaw = storm.renderYawOffset + MathHelper.clamp(relativeYaw,
-                -MAXIMUM_LATE_HEAD_YAW, MAXIMUM_LATE_HEAD_YAW);
+                -MAXIMUM_HEAD_YAW, MAXIMUM_HEAD_YAW);
     }
 
     private Vec3d getRandomLookPosition(HeadState head) {

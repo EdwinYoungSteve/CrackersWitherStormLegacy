@@ -231,6 +231,18 @@ public final class BowelsBossfightController {
         INITIALIZED_PHASES.remove(core);
     }
 
+    /** Repairs worlds completed by builds where the terminal 1.12 damage was rejected. */
+    public static boolean reconcileCompletedDeath(WitherStormEntity storm) {
+        if (storm == null || storm.world.isRemote || storm.isDead || storm.getHealth() <= 0.0F
+                || storm.world.getMinecraftServer() == null) return false;
+        WorldServer bowels = storm.world.getMinecraftServer().getWorld(BowelsDimensions.DIMENSION_ID);
+        if (bowels == null) return false;
+        BowelsInstanceData.Instance instance = BowelsInstanceData.get(bowels).get(storm.getUniqueID());
+        if (instance == null || !instance.completed) return false;
+        storm.finishBowelsDeath(findEntity(bowels, instance.killerUuid));
+        return storm.isDead || storm.getHealth() <= 0.0F;
+    }
+
     private static void advance(WorldServer world, SupplementalEntities.CommandBlockEntity core,
                                 BowelsInstanceData data, BowelsInstanceData.Instance instance) {
         finishPhase(world, core, instance.bossPhase);

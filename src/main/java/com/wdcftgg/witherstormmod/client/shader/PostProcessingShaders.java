@@ -5,7 +5,6 @@ import com.wdcftgg.witherstormmod.Tags;
 import com.wdcftgg.witherstormmod.WitherStormMod;
 import com.wdcftgg.witherstormmod.client.WitherStormClientConfig;
 import com.wdcftgg.witherstormmod.common.entity.FormidibombSource;
-import com.wdcftgg.witherstormmod.mixin.client.ShaderGroupAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
@@ -67,8 +66,7 @@ public final class PostProcessingShaders implements IResourceManagerReloadListen
         float progress = MathHelper.clamp(
                 (startFuse - source.getFuseLife()) / (float) startFuse, 0.0F, 1.0F);
         float multiplier = progress * 0.1F;
-        for (Shader shader : ((ShaderGroupAccessor) (Object) aberrationEffect)
-                .witherstormmod$getShaders()) {
+        for (Shader shader : aberrationEffect.listShaders) {
             shader.getShaderManager().getShaderUniformOrDefault("Multiplier").set(multiplier);
         }
         aberrationEffect.render(partialTicks);
