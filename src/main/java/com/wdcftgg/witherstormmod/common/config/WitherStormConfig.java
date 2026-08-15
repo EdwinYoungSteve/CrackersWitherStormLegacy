@@ -7,6 +7,7 @@ import net.minecraftforge.common.config.Config;
 @Config(modid = Tags.MOD_ID, name = Tags.MOD_ID + "/server")
 public final class WitherStormConfig {
     public enum UltimateTargetingType { NEAREST, FARTHEST, GROUP, NONE, RANDOM_STROLL, RANDOM_PLAYER, RANDOMIZED, RANDOM_STROLL_NEAR_PLAYER }
+    public enum ListMode { BLACKLIST, WHITELIST }
 
     @Config.Name("autoSpawnWitherStorm")
     @Config.Comment("Whether a Wither Storm automatically spawns from the origin platform after world creation.")
@@ -16,6 +17,14 @@ public final class WitherStormConfig {
     @Config.Comment("Minutes before the automatically generated Wither Storm spawns.")
     @Config.RangeInt(min = 0, max = 120)
     public static int autoSpawnTime = 1;
+
+    @Config.Name("summoningDimensionListMode")
+    @Config.Comment("How summoningDimensions is interpreted: BLACKLIST denies listed dimension IDs; WHITELIST allows only listed IDs.")
+    public static ListMode summoningDimensionListMode = ListMode.BLACKLIST;
+
+    @Config.Name("summoningDimensions")
+    @Config.Comment("Dimension IDs used by summoningDimensionListMode. Examples: 0, -1, 7. An empty blacklist allows every dimension; an empty whitelist allows none.")
+    public static String[] summoningDimensions = {};
 
     @Config.Name("ultimateTargetingType")
     @Config.Comment("Strategy used to choose the Wither Storm ultimate player target.")
@@ -431,6 +440,46 @@ public final class WitherStormConfig {
     @Config.RangeDouble(min = 0.01D, max = 32.0D)
     public static double evolutionAttributeModifier = 1.0D;
 
+    @Config.Name("phase0Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 0 to phase 1.")
+    @Config.RangeInt(min = 1)
+    public static int phase0Requirement = 100;
+
+    @Config.Name("phase1Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 1 to phase 2.")
+    @Config.RangeInt(min = 1)
+    public static int phase1Requirement = 400;
+
+    @Config.Name("phase2Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 2 to phase 3.")
+    @Config.RangeInt(min = 1)
+    public static int phase2Requirement = 1200;
+
+    @Config.Name("phase3Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 3 to phase 4.")
+    @Config.RangeInt(min = 1)
+    public static int phase3Requirement = 18800;
+
+    @Config.Name("phase4Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 4 to phase 5.")
+    @Config.RangeInt(min = 1)
+    public static int phase4Requirement = 195000;
+
+    @Config.Name("phase5Requirement")
+    @Config.Comment("Cumulative consumed mass marking the end of phase 5. The Formidibomb sequence still controls entry into phase 6.")
+    @Config.RangeInt(min = 1)
+    public static int phase5Requirement = 351400;
+
+    @Config.Name("phase6Requirement")
+    @Config.Comment("Cumulative consumed mass required to evolve from phase 6 to phase 7.")
+    @Config.RangeInt(min = 1)
+    public static int phase6Requirement = 580800;
+
+    @Config.Name("phase7Requirement")
+    @Config.Comment("Cumulative consumed mass required for the fully grown phase 7 state.")
+    @Config.RangeInt(min = 1)
+    public static int phase7Requirement = 2125000;
+
     @Config.Name("witherSicknessEnabled")
     @Config.Comment("是否启用凋零病感染状态机。")
     @Config.RequiresMcRestart
@@ -599,6 +648,14 @@ public final class WitherStormConfig {
     @Config.RangeInt(min = 10, max = 80)
     public static int devourerClusterPickupInterval = 40;
 
+    @Config.Name("consumableBlockWhitelist")
+    @Config.Comment("Block registry IDs that are always absorbable, overriding the upstream Wither Storm block blacklist. Supports namespace:* wildcards. Example: minecraft:bedrock.")
+    public static String[] consumableBlockWhitelist = {};
+
+    @Config.Name("consumableBlockBlacklist")
+    @Config.Comment("Block registry IDs that the Wither Storm must never absorb. This list takes priority over consumableBlockWhitelist. Supports namespace:* wildcards.")
+    public static String[] consumableBlockBlacklist = {};
+
     @Config.Name("clusterSizeModifier")
     @Config.Comment("Amount added to the radius of default block clusters.")
     @Config.RangeInt(min = 0, max = 16)
@@ -615,6 +672,28 @@ public final class WitherStormConfig {
     @Config.Name("constantBlackhole")
     @Config.Comment("Remove small-cluster cooldowns. This can be extremely expensive.")
     public static boolean constantBlackhole = false;
+
+    public static boolean canSummonInDimension(int dimensionId) {
+        return ConfiguredListMatcher.allows(Integer.toString(dimensionId), summoningDimensions,
+                summoningDimensionListMode == ListMode.WHITELIST);
+    }
+
+    public static int getConfiguredPhaseRequirement(int phase) {
+        int configured;
+        switch (phase) {
+            case 0: configured = phase0Requirement; break;
+            case 1: configured = phase1Requirement; break;
+            case 2: configured = phase2Requirement; break;
+            case 3: configured = phase3Requirement; break;
+            case 4: configured = phase4Requirement; break;
+            case 5: configured = phase5Requirement; break;
+            case 6: configured = phase6Requirement; break;
+            case 7: configured = phase7Requirement; break;
+            default: return 0;
+        }
+        int previous = phase == 0 ? 0 : getConfiguredPhaseRequirement(phase - 1);
+        return Math.max(previous, Math.max(1, configured));
+    }
 
     private WitherStormConfig() {
     }

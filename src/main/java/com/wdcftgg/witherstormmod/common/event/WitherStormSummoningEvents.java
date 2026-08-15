@@ -1,6 +1,7 @@
 package com.wdcftgg.witherstormmod.common.event;
 
 import com.wdcftgg.witherstormmod.Tags;
+import com.wdcftgg.witherstormmod.common.config.WitherStormConfig;
 import com.wdcftgg.witherstormmod.common.entity.WitherStormEntity;
 import com.wdcftgg.witherstormmod.common.init.ModSounds;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
@@ -17,6 +18,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.EnumDifficulty;
 import net.minecraft.world.World;
 import net.minecraftforge.event.world.BlockEvent;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
@@ -33,6 +35,7 @@ public final class WitherStormSummoningEvents {
         }
         World world = (World) event.getWorld();
         if (world.getDifficulty() == EnumDifficulty.PEACEFUL) return;
+        if (!WitherStormConfig.canSummonInDimension(world.provider.getDimension())) return;
         BlockPos placedPosition = event.getPos();
         for (EnumFacing.Axis axis : new EnumFacing.Axis[] {EnumFacing.Axis.X, EnumFacing.Axis.Z}) {
             for (int offset = -1; offset <= 1; offset++) {
@@ -42,6 +45,18 @@ public final class WitherStormSummoningEvents {
                     return;
                 }
             }
+        }
+    }
+
+    /** Final guard for spawn eggs, /summon and third-party code which bypasses the ritual. */
+    @SubscribeEvent
+    public static void onEntityJoinWorld(EntityJoinWorldEvent event) {
+        if (event.getWorld().isRemote || !(event.getEntity() instanceof WitherStormEntity)) return;
+        WitherStormEntity storm = (WitherStormEntity) event.getEntity();
+        if (!storm.wasRestoredFromPersistentData()
+                && !WitherStormConfig.canSummonInDimension(
+                event.getWorld().provider.getDimension())) {
+            event.setCanceled(true);
         }
     }
 

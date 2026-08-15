@@ -88,6 +88,7 @@ import com.wdcftgg.witherstormmod.common.init.ModItems;
 import com.wdcftgg.witherstormmod.common.network.ModNetwork;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamBlockTags;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamEntityTags;
+import com.wdcftgg.witherstormmod.common.resource.WitherStormBlockRules;
 import com.wdcftgg.witherstormmod.common.resource.UpstreamItemTags;
 import com.wdcftgg.witherstormmod.common.taint.TaintingManager;
 import com.wdcftgg.witherstormmod.common.util.DebrisCluster;
@@ -159,7 +160,6 @@ public class WitherStormEntity extends EntityMob
     private static final double BASE_ARMOR = 8.0D;
     private static final UUID PHASE_HEALTH_MODIFIER_UUID = UUID.fromString("9B8DA22B-138B-4B68-879D-3FD329FAF903");
     private static final UUID PHASE_ARMOR_MODIFIER_UUID = UUID.fromString("C806DBFA-2B10-4BEA-B16C-C3233707399C");
-    private static final int[] PHASE_REQUIREMENTS = {100, 400, 1200, 18800, 195000, 351400, 580800, 2125000};
     private static final float[] PHASE_WIDTH = {0.9F, 0.9F, 0.9F, 0.9F, 10.0F, 10.0F, 15.0F, 15.0F};
     private static final float[] PHASE_HEIGHT = {3.5F, 3.5F, 3.5F, 3.5F, 30.0F, 60.0F, 90.0F, 120.0F};
     private static final int SEGMENT_RESTORE_GRACE_TICKS = 200;
@@ -172,6 +172,7 @@ public class WitherStormEntity extends EntityMob
     private final WitherStormSectionManager sectionManager = new WitherStormSectionManager(this);
     private final IgnoredTargetsManager ignoredTargetsManager = new IgnoredTargetsManager(this);
     private final EvolutionProfiler evolutionProfiler = new EvolutionProfiler();
+    private boolean restoredFromPersistentData;
     private final WitherStormPulling.Source trackedEntityPullSource = new WitherStormPulling.Source() {
         @Override public WitherStormEntity getStorm() { return WitherStormEntity.this; }
         @Override public int getPhase() { return WitherStormEntity.this.getPhase(); }
@@ -1099,8 +1100,8 @@ public class WitherStormEntity extends EntityMob
     }
 
     public int getConsumptionAmountForPhase(int phase) {
-        if (phase < 0 || phase >= PHASE_REQUIREMENTS.length) return 0;
-        return adjustAmountForEvolutionSpeed(PHASE_REQUIREMENTS[phase]);
+        return adjustAmountForEvolutionSpeed(
+                WitherStormConfig.getConfiguredPhaseRequirement(phase));
     }
 
     public int adjustAmountForEvolutionSpeed(int rawRequirement) {
@@ -2427,9 +2428,8 @@ public class WitherStormEntity extends EntityMob
                     (int) Math.round(random.nextGaussian() * offsetScale),
                     (int) Math.round(random.nextGaussian() * offsetScale));
             IBlockState candidateState = world.getBlockState(candidate);
-            if (candidateState.getBlock() == Blocks.AIR
-                    || !WorldUtil.isBlockExposed(world, candidate)
-                    || UpstreamBlockTags.contains(UpstreamBlockTags.WITHER_STORM_BLOCK_BLACKLIST, candidateState)) continue;
+            if (!WitherStormBlockRules.canConsume(candidateState)
+                    || !WorldUtil.isBlockExposed(world, candidate)) continue;
             if (WitherStormConfig.onlyTryPickingUpTractorTagged
                     && !UpstreamBlockTags.contains(
                     UpstreamBlockTags.TRACTOR_BEAM_DISTRACTION_BLOCKS, candidateState)) continue;
@@ -2439,8 +2439,7 @@ public class WitherStormEntity extends EntityMob
             float clusterRadius = getTractorBeamClusterRadius(random);
             SupplementalEntities.BlockClusterEntity cluster = new SupplementalEntities.BlockClusterEntity(world);
             cluster.populateWithRadius(candidate, clusterRadius,
-                    (level, position, state) -> !UpstreamBlockTags.contains(
-                            UpstreamBlockTags.WITHER_STORM_BLOCK_BLACKLIST, state));
+                    (level, position, state) -> WitherStormBlockRules.canConsume(state));
             if (cluster.getBlocks().isEmpty()) continue;
             cluster.setTime(time);
             if (random.nextInt(3) == 0) {
@@ -3665,6 +3664,8 @@ public class WitherStormEntity extends EntityMob
 
     @Override
     public void readEntityFromNBT(NBTTagCompound compound) {
+        restoredFromPersistentData = compound.hasKey("UUIDMost", 99)
+                && compound.hasKey("UUIDLeast", 99);
         super.readEntityFromNBT(compound);
         resummoned = compound.hasKey("Resummoned", 1)
                 ? compound.getBoolean("Resummoned") : compound.getBoolean("WitherStormResummoned");
@@ -3791,6 +3792,10 @@ public class WitherStormEntity extends EntityMob
         legacyBossInfo.setName(getDisplayName());
         legacyBossInfo.setVisible(!isPlayDeadAiDisabled());
         setHealth(Math.min(getHealth(), getMaxHealth()));
+    }
+
+    public boolean wasRestoredFromPersistentData() {
+        return restoredFromPersistentData;
     }
 
     private static void writeUuid(NBTTagCompound compound, String key, UUID uuid) {

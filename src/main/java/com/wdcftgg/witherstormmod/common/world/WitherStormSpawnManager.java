@@ -62,7 +62,9 @@ public final class WitherStormSpawnManager implements IWorldGenerator {
     public static void onWorldTick(TickEvent.WorldTickEvent event) {
         if (event.phase != TickEvent.Phase.END || event.world.isRemote
                 || !(event.world instanceof WorldServer)
-                || event.world.provider.getDimension() != OVERWORLD) {
+                || event.world.provider.getDimension() != OVERWORLD
+                || !WitherStormConfig.canSummonInDimension(
+                event.world.provider.getDimension())) {
             return;
         }
         INSTANCE.tick((WorldServer) event.world);

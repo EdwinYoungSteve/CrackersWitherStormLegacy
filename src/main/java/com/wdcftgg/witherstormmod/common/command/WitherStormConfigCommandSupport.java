@@ -35,7 +35,8 @@ final class WitherStormConfigCommandSupport {
                 "bowelsFallResistance", "resummonedPhase", "canAttackHeads",
                 "endOfPhaseFiveBombableExclusively",
                 "shouldPlayGlobalSoundsCrossDimensionally", "onlyTryPickingUpTractorTagged",
-                "constantBlackhole", "instantChomp", "healFromChomp");
+                "constantBlackhole", "instantChomp", "healFromChomp",
+                "summoningDimensionListMode");
         register("server.ultimate_target_logic", "ultimateTargetingType",
                 "farthestTargetingTime", "randomizedTargetingTime",
                 "randomlySpeedUpWithTargetChange", "amuletOverride",
@@ -61,7 +62,10 @@ final class WitherStormConfigCommandSupport {
                 "normalFlyingSpeed");
         register("server.targeting", "headEscapeTime", "tractorPullSpeedModifier",
                 "specialTargetingBias", "specialTargetingBiasChance");
-        register("server.evolution", "evolutionAttributeModifier");
+        register("server.evolution", "evolutionAttributeModifier",
+                "phase0Requirement", "phase1Requirement", "phase2Requirement",
+                "phase3Requirement", "phase4Requirement", "phase5Requirement",
+                "phase6Requirement", "phase7Requirement");
         register("server.performance", "clustersRemoveItems", "squashHitbox",
                 "chunkLoadingRadius", "removeNearbyJunk", "mobsRunIntoPortals");
         register("server.world_consumption", "hunchbackClusterPickupInterval",

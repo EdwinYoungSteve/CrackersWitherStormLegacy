@@ -100,6 +100,9 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
                 condition -> canCraftCondition(condition));
         if (recipe == null) return;
         if (recipe.isEntityRecipe()) {
+            if (SuperBeaconLogic.isWitherStormResummon(recipe.entity)
+                    && !WitherStormConfig.canSummonInDimension(
+                    world.provider.getDimension())) return;
             resummoningEntity = recipe.entity;
             resummoningEntityNbt = recipe.entityNbt;
             resummonTicks = 0;
@@ -366,6 +369,14 @@ public class SuperBeaconTileEntity extends AbstractSuperBeaconTileEntity impleme
     }
 
     private void finishWitherStormResummon() {
+        if (!WitherStormConfig.canSummonInDimension(world.provider.getDimension())) {
+            for (SupplementalEntities.BlockClusterEntity cluster : resummonClusters) {
+                if (cluster != null && !cluster.isDead) cluster.setDead();
+            }
+            resummonClusters.clear();
+            finishResummonState();
+            return;
+        }
         List<BlockPos> supports = new ArrayList<BlockPos>(connected.values());
         for (SupplementalEntities.BlockClusterEntity cluster : resummonClusters) {
             if (cluster != null && !cluster.isDead) cluster.setDead();
