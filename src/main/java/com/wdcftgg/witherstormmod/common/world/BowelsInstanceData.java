@@ -107,6 +107,7 @@ public class BowelsInstanceData extends WorldSavedData {
         public final int originDimension;
         public final BlockPos origin;
         public UUID commandBlockUuid;
+        public UUID rushSymbiontUuid;
         public final UUID[] arenaHeadUuids = new UUID[2];
         public final List<UUID> arenaTentacleUuids = new ArrayList<>();
         public int arenaTentacleTargetCount;
@@ -135,6 +136,7 @@ public class BowelsInstanceData extends WorldSavedData {
             tag.setInteger("OriginDimension", originDimension);
             tag.setLong("Origin", origin.toLong());
             if (commandBlockUuid != null) tag.setUniqueId("CommandBlock", commandBlockUuid);
+            if (rushSymbiontUuid != null) tag.setUniqueId("RushSymbiont", rushSymbiontUuid);
             for (int index = 0; index < arenaHeadUuids.length; index++) {
                 if (arenaHeadUuids[index] != null) tag.setUniqueId("ArenaHead" + index, arenaHeadUuids[index]);
             }
@@ -161,6 +163,9 @@ public class BowelsInstanceData extends WorldSavedData {
             Instance instance = new Instance(tag.getUniqueId("Storm"), BlockPos.fromLong(tag.getLong("Center")),
                     tag.getInteger("OriginDimension"), BlockPos.fromLong(tag.getLong("Origin")));
             if (tag.hasUniqueId("CommandBlock")) instance.commandBlockUuid = tag.getUniqueId("CommandBlock");
+            if (tag.hasUniqueId("RushSymbiont")) {
+                instance.rushSymbiontUuid = tag.getUniqueId("RushSymbiont");
+            }
             for (int index = 0; index < instance.arenaHeadUuids.length; index++) {
                 if (tag.hasUniqueId("ArenaHead" + index)) {
                     instance.arenaHeadUuids[index] = tag.getUniqueId("ArenaHead" + index);

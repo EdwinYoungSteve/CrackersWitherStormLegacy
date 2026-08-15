@@ -2350,6 +2350,7 @@ public final class SupplementalEntities {
 
         @Override
         public void writeSpawnData(ByteBuf buffer) {
+            buffer.writeBoolean(isIndependentBowelsPart());
             buffer.writeInt(Math.max(0, coreStateTicks));
             buffer.writeInt(Math.max(0, modeAnimationTicks));
             buffer.writeFloat(getProtectionYOffset());
@@ -2358,6 +2359,7 @@ public final class SupplementalEntities {
 
         @Override
         public void readSpawnData(ByteBuf buffer) {
+            if (buffer.readBoolean()) setIndependentBowelsPart();
             coreStateTicks = Math.max(0, buffer.readInt());
             modeAnimationTicks = Math.max(0, buffer.readInt());
             previousModeAnimationTicks = modeAnimationTicks;

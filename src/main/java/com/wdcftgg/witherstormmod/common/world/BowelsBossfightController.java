@@ -107,7 +107,8 @@ public final class BowelsBossfightController {
 
         if (isFixedPhase(phase) && ticks > FIXED_PHASE_TICKS[phase]) {
             advance(world, core, data, instance);
-        } else if ((phase == 10 || phase == 15) && guardsDefeated(world, core)) {
+        } else if ((phase == 10 || phase == 15)
+                && guardsDefeated(world, core, instance, phase)) {
             advance(world, core, data, instance);
         }
         if (ticks % 20 == 0) data.markDirty();
@@ -289,6 +290,7 @@ public final class BowelsBossfightController {
                 break;
             case 10:
                 core.curlStructureTentacles(false);
+                ensureRushSymbiont(world, core, instance);
                 break;
             case 14:
                 ModNetwork.shakeTracking(core, 120.0F, 16.0F);
@@ -340,6 +342,9 @@ public final class BowelsBossfightController {
             spawnWaveMob(world, core, WAVE_3, 8.0D);
         } else if ((phase == 10 || phase == 15) && ticks % 40 == 0) {
             core.curlStructureTentacles(true);
+            if (phase == 10 && instance.rushSymbiontUuid == null) {
+                ensureRushSymbiont(world, core, instance);
+            }
         }
     }
 
@@ -358,7 +363,6 @@ public final class BowelsBossfightController {
             core.finishPodiumMove();
         } else if (phase == 4 || phase == 9) {
             play(world, core, "command_block_power_down", SoundCategory.HOSTILE, 5.0F);
-            if (phase == 9) spawnRushSymbiont(world, core);
         } else if (phase == 14) {
             play(world, core, "command_block_power_down", SoundCategory.HOSTILE, 6.0F);
         } else if (phase == 10 || phase == 15) {
@@ -437,29 +441,51 @@ public final class BowelsBossfightController {
         }
     }
 
-    private static void spawnRushSymbiont(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
+    private static boolean ensureRushSymbiont(
+            WorldServer world, SupplementalEntities.CommandBlockEntity core,
+            BowelsInstanceData.Instance instance) {
+        if (instance.rushSymbiontUuid != null) return true;
+        for (SickenedEntities.WitheredSymbiontEntity existing
+                : world.getEntitiesWithinAABB(SickenedEntities.WitheredSymbiontEntity.class,
+                core.getEntityBoundingBox().grow(80.0D))) {
+            if (!existing.isDead && existing.isEntityAlive() && existing.isRushMode()) {
+                instance.rushSymbiontUuid = existing.getUniqueID();
+                BowelsInstanceData.get(world).markDirty();
+                return true;
+            }
+        }
+
         SickenedEntities.WitheredSymbiontEntity symbiont =
                 new SickenedEntities.WitheredSymbiontEntity(world);
-        BlockPos pos = randomNearbyPosition(world, core, symbiont, 50, 20);
+        BlockPos pos = randomNearbyPosition(world, core, symbiont, 50, 40);
+        if (pos == null) {
+            pos = randomNearbyArenaFloorPosition(world, core, symbiont, 50, 80);
+        }
         if (pos == null) {
             symbiont.setDead();
-            return;
+            return false;
         }
         symbiont.setPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
         symbiont.onInitialSpawn(world.getDifficultyForLocation(pos), null);
-        if (!world.spawnEntity(symbiont)) return;
         symbiont.setNonBossMode(true);
         symbiont.setRushMode(true);
         applyAttributeModifier(symbiont, SharedMonsterAttributes.MAX_HEALTH,
                 "Withered symbiont final boss battle low health", -0.5D, 1);
         symbiont.setHealth(symbiont.getMaxHealth());
         symbiont.enablePersistence();
+        if (!world.spawnEntity(symbiont)) {
+            symbiont.setDead();
+            return false;
+        }
+        instance.rushSymbiontUuid = symbiont.getUniqueID();
+        BowelsInstanceData.get(world).markDirty();
         spawnMobParticles(world, core, symbiont, 40);
         world.spawnParticle(EnumParticleTypes.SMOKE_LARGE, symbiont.posX,
                 symbiont.posY + symbiont.getEyeHeight(), symbiont.posZ,
                 40, core.getRNG().nextGaussian(), core.getRNG().nextGaussian(),
                 core.getRNG().nextGaussian(), 0.01D);
         symbiont.playSound(ModSounds.get("withered_symbiont_spawn"), 4.0F, 1.0F);
+        return true;
     }
 
     private static void spawnMobParticles(WorldServer world,
@@ -472,8 +498,13 @@ public final class BowelsBossfightController {
                 ModNetwork.COMMAND_BLOCK_PARTICLES_GAUSSIAN);
     }
 
-    private static boolean guardsDefeated(WorldServer world, SupplementalEntities.CommandBlockEntity core) {
+    private static boolean guardsDefeated(
+            WorldServer world, SupplementalEntities.CommandBlockEntity core,
+            BowelsInstanceData.Instance instance, int phase) {
         if (!world.isAreaLoaded(core.getPosition(), 2)) return false;
+        // Phase 10 is not allowed to silently skip its required guard. A null
+        // UUID means every spawn attempt failed and tickPhase must keep retrying.
+        if (phase == 10 && instance.rushSymbiontUuid == null) return false;
         AxisAlignedBB area = core.getEntityBoundingBox().grow(50.0D);
         for (SickenedEntities.WitheredSymbiontEntity symbiont : world.getEntitiesWithinAABB(SickenedEntities.WitheredSymbiontEntity.class, area)) {
             if (!symbiont.isDead && symbiont.isEntityAlive()) return false;
@@ -690,6 +721,38 @@ public final class BowelsBossfightController {
             if (Math.sqrt(cursor.distanceSq(core.getPosition())) <= 6.0D) continue;
             if (!hasEnoughSpace(world, entity, cursor)) continue;
             return cursor;
+        }
+        return null;
+    }
+
+    /**
+     * Cave-safe fallback for the arena guard. A global heightmap can resolve to
+     * the outside roof of the Bowels structure, so scan the playable vertical
+     * band around the command block and return the solid block below a valid
+     * feet position (the caller applies the existing +1 Y convention).
+     */
+    @Nullable
+    private static BlockPos randomNearbyArenaFloorPosition(
+            WorldServer world, SupplementalEntities.CommandBlockEntity core,
+            Entity entity, int diameter, int attempts) {
+        int halfDiameter = Math.max(1, diameter / 2);
+        int minimumY = Math.max(1, MathHelper.floor(core.posY) - 24);
+        int maximumY = Math.min(world.getActualHeight() - 2,
+                MathHelper.floor(core.posY) + 16);
+        BlockPos origin = core.getPosition();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            int x = origin.getX() + core.getRNG().nextInt(diameter) - halfDiameter;
+            int z = origin.getZ() + core.getRNG().nextInt(diameter) - halfDiameter;
+            for (int y = maximumY; y >= minimumY; y--) {
+                BlockPos feet = new BlockPos(x, y, z);
+                if (!world.isBlockLoaded(feet)
+                        || Math.sqrt(feet.distanceSq(origin)) <= 6.0D) continue;
+                if (WorldEntitySpawner.canCreatureTypeSpawnAtLocation(
+                        EntityLiving.SpawnPlacementType.ON_GROUND, world, feet)
+                        && hasEnoughSpace(world, entity, feet)) {
+                    return feet.down();
+                }
+            }
         }
         return null;
     }

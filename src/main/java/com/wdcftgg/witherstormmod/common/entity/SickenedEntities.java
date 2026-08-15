@@ -4488,7 +4488,14 @@ public final class SickenedEntities {
                     entity.setSpell(SymbiontSpells.Type.EMPTY);
                 }
             },
-            SUMMONING,
+            SUMMONING {
+                @Override boolean shouldMoveToNextStage(WitheredSymbiontEntity entity) {
+                    // The summon task normally completes in at most 219 ticks.
+                    // Keep a watchdog so a modded AI-task conflict can never
+                    // leave the invulnerable boss in this stage forever.
+                    return entity.getStageTicks() > 240;
+                }
+            },
             VULNERABLE {
                 @Override boolean shouldMoveToNextStage(WitheredSymbiontEntity entity) {
                     return entity.getStageTicks() > 4800;
@@ -4577,10 +4584,15 @@ public final class SickenedEntities {
             private int time;
             private SummonMobsGoal(WitheredSymbiontEntity entity) { this.entity = entity; setMutexBits(7); }
             @Override public boolean shouldExecute() {
-                EntityLivingBase target = entity.getAttackTarget();
-                return target != null && target.isEntityAlive();
+                // Summoning is a timed boss-stage action and does not use the
+                // attack target. Requiring one here permanently stalled the
+                // fight when the target died, teleported or disconnected just
+                // as the symbiont entered this stage.
+                return entity.getStage() == BossfightStage.SUMMONING;
             }
-            @Override public boolean shouldContinueExecuting() { return shouldExecute() && time > 0; }
+            @Override public boolean shouldContinueExecuting() {
+                return entity.getStage() == BossfightStage.SUMMONING && time > 0;
+            }
             @Override public void startExecuting() {
                 time = 60 + entity.getRNG().nextInt(60) + (entity.shouldIncreaseDifficulty() ? 40 : 0);
                 entity.playSound(ModSounds.get("withered_symbiont_summon"), 4.0F, 1.0F);
@@ -4588,7 +4600,10 @@ public final class SickenedEntities {
             @Override public void updateTask() {
                 if (time > 0 && --time % 10 == 0) entity.summonSupportMob(false);
             }
-            @Override public void resetTask() { entity.nextStage(); }
+            @Override public void resetTask() {
+                time = 0;
+                if (entity.getStage() == BossfightStage.SUMMONING) entity.nextStage();
+            }
         }
 
         private static final class DoNothingGoal extends EntityAIBase {
